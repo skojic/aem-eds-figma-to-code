@@ -75,13 +75,15 @@ Before writing each CSS rule: if the selector targets a Dynamic Content Element 
 
 ### Mobile-first CSS file order (mandatory)
 
-The **CSS Skeleton** section MUST emit rules in this **physical order** so the cascade matches the mobile-first mental model and reviews stay predictable:
+The **CSS Skeleton** section MUST emit rules in this **physical order** so the cascade matches the mobile-first mental model and reviews stay predictable.
+
+The ladder is driven by the `breakpoints` list in `figma-to-code.config.md`. The pack ships with five default breakpoints — 320, 768, 1024, 1280, and 1440 px — but the actual values for **this project** come from config, so always resolve from there.
 
 1. **Base (mobile, first breakpoint from config)** — all rules **without** `@media`, scoped via the mechanism in `component_model` (default `@scope`). No desktop-only values here.
-2. **`@media (width >= 768px)`** — tablet overrides only
-3. **`@media (width >= 1024px)`** — desktop overrides only
-4. **`@media (width >= 1280px)`** — large desktop, only if Figma includes a wide frame
-5. **`@media (width >= 1440px)`** — XL, only if Figma includes an XL frame
+2. **`@media (width >= <2nd breakpoint from config>)`** — next-up overrides (pack default: 768 px)
+3. **`@media (width >= <3rd breakpoint from config>)`** — next-up overrides (pack default: 1024 px)
+4. **`@media (width >= <4th breakpoint from config>)`** — only if Figma includes a frame at this width (pack default: 1280 px)
+5. **`@media (width >= <5th breakpoint from config>)`** — only if Figma includes an XL frame (pack default: 1440 px)
 
 Use the breakpoints listed in config (`breakpoints`); emit only the breakpoint blocks for which Figma provides frames.
 
@@ -93,6 +95,8 @@ Use the breakpoints listed in config (`breakpoints`); emit only the breakpoint b
 ### Layout matrix (mandatory section)
 
 Add a `## Layout matrix (flex / grid)` section immediately **after** the Code Scaffold section, **before** Design Token Mapping. Use a table derived from Step 2b:
+
+> **Pack defaults shown** — the column header pixel values (768, 1024, 1280, 1440) are the pack's default breakpoints. Consumers replace these with the actual values from `breakpoints` in `figma-to-code.config.md`.
 
 | Container (block-scoped class) | Mobile (base) | Tablet (≥768px) | Desktop (≥1024px) | Wide (≥1280px) | XL (≥1440px) |
 |---|---|---|---|---|---|
@@ -121,6 +125,8 @@ Include **every** flex/grid wrapper that changes or could be misread across brea
 
 All new block CSS MUST use the scoping mechanism from `component_model` (default `@scope`) per project convention in `CLAUDE.md`. The Figma root frame maps to the block wrapper `<div class="blockname">`. Authored content renders as nested `<div>` rows/columns inside the wrapper.
 
+> **Pack defaults shown** — the pixel values in this skeleton (768, 1024, 1280) are the pack's default breakpoints. Always substitute the actual values from `breakpoints` in `figma-to-code.config.md`.
+
 ```css
 @scope (.blockname) {
   /* 1. Base (mobile, first breakpoint from config) — no @media */
@@ -135,21 +141,21 @@ All new block CSS MUST use the scoping mechanism from `component_model` (default
     color: var(--text-color);
   }
 
-  /* 2. Tablet */
+  /* 2. Tablet (pack default: 768px — use config value) */
   @media (width >= 768px) {
     .blockname-content {
       /* tablet overrides */
     }
   }
 
-  /* 3. Desktop */
+  /* 3. Desktop (pack default: 1024px — use config value) */
   @media (width >= 1024px) {
     .blockname-content {
       /* desktop overrides — set again if different from tablet */
     }
   }
 
-  /* 4. Wide (only if Figma has a 1280 frame) */
+  /* 4. Wide (pack default: 1280px — use config value; only if Figma has a frame at this width) */
   @media (width >= 1280px) {
     /* … */
   }
@@ -278,9 +284,13 @@ Write to the path resolved from config (`spec_output_path`). Verify the file con
 After writing, cross-reference every token used in the CSS Skeleton against the token files listed in config (`token_files`):
 
 ```bash
+# spec_output_path comes from figma-to-code.config.md (pack default: drafts/specs/{ticket}/design.md)
+SPEC="<resolved spec_output_path for {ticket}>"
+
 # Tokens used in design.md but missing from token files
-grep -oE 'var\(--[a-z0-9-]+' drafts/specs/{ticket}/design.md | sort -u > /tmp/tokens-used.txt
-grep -oE '--[a-z0-9-]+:' <primary token file from config> | sort -u | sed 's/:$//' > /tmp/tokens-defined.txt
+# token_files comes from figma-to-code.config.md (pack default: styles/styles.css — iterate over all listed files)
+grep -oE 'var\(--[a-z0-9-]+' "$SPEC" | sort -u > /tmp/tokens-used.txt
+grep -oE '--[a-z0-9-]+:' <primary token file from config token_files> | sort -u | sed 's/:$//' > /tmp/tokens-defined.txt
 comm -23 /tmp/tokens-used.txt <(sed 's/^/var(/' /tmp/tokens-defined.txt | sort -u)
 ```
 
