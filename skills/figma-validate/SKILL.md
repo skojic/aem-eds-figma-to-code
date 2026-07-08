@@ -16,6 +16,16 @@ empty), `mcp.content_store` (OPTIONAL), `spec_output_path`,
 `content_path_template`, `preview_url_template`, `breakpoints`, `themes`,
 `lint_cmd`, `test_cmd`.
 
+**Spec dir** — defined once, used everywhere below:
+`spec_output_path` in config is the FULL path to the spec file including the
+filename (e.g. `drafts/specs/{ticket}/design.md`). The **spec dir** for a given
+ticket is the directory that contains the spec file — i.e. `spec_output_path`
+with `{ticket}` substituted and the trailing `/design.md` filename removed
+(e.g. `drafts/specs/{ticket}/`). This is the same directory that
+`figma-specify` writes `design.md` into and `figma-screenshot` saves
+`figma-*.png` into. All path references below use `<spec-dir>` to mean this
+resolved directory.
+
 **content_store behaviour:**
 - If `mcp.content_store` is set and `content_path_template` is filled, this
   skill may auto-create missing authored test content via that MCP (never
@@ -27,7 +37,7 @@ empty), `mcp.content_store` (OPTIONAL), `spec_output_path`,
 **Scope — runtime validation only:**
 - Render the authored content file in a real browser via the `mcp.browser` server
 - Capture screenshots at the viewports from `breakpoints` (config) that have a Figma frame
-- Compare against `{spec_output_path}/{ticket}/figma-*.png` and the rules in `design.md`
+- Compare against `<spec-dir>/figma-*.png` and the rules in `design.md`
 - Spot-check computed CSS (`flex-direction`, `gap`, resolved token colors, font sizes) against the Layout Matrix
 - Surface console errors and network failures
 - Run `lint_cmd` (config; skip if empty) and `test_cmd` (config; skip if empty)
@@ -41,8 +51,8 @@ empty), `mcp.content_store` (OPTIONAL), `spec_output_path`,
 ## Pre-flight (mandatory — fail-stop if any is missing)
 
 1. **Ticket ID resolvable** — `{ticket}` from invocation argument.
-2. **`{spec_output_path}/{ticket}/design.md` exists** — produced by `/figma-specify`. If missing, **STOP** and instruct: "Run `/figma-specify {ticket}` first."
-3. **Figma screenshots exist** under `{spec_output_path}/{ticket}/figma-*.png`. If none, **STOP** and instruct: "Run `/figma-screenshot {ticket} <figma-url>` for each frame referenced in design.md, then re-run."
+2. **`<spec-dir>/design.md` exists** — produced by `/figma-specify`. If missing, **STOP** and instruct: "Run `/figma-specify {ticket}` first."
+3. **Figma screenshots exist** under `<spec-dir>/figma-*.png`. If none, **STOP** and instruct: "Run `/figma-screenshot {ticket} <figma-url>` for each frame referenced in design.md, then re-run."
 4. **Authored test content** reachable at `preview_url_template` (from config).
    - If `mcp.content_store` is set: probe via that MCP using `content_path_template` (from config); if the entry is missing, **auto-create** it — see Step 1b for content rules.
    - If `mcp.content_store` is empty: verify that `preview_url_template` responds; if nothing renders, **STOP** per the Fail-Stop rule below and ask the user to author or serve content.
@@ -60,23 +70,23 @@ empty), `mcp.content_store` (OPTIONAL), `spec_output_path`,
 | Block name | `teaser` | `design.md` Source block, or ticket title |
 | Preview URL | `preview_url_template` (from config) | Config |
 | Viewports to test | the viewports from `breakpoints` (config) | Config + `design.md` breakpoint overrides |
-| Figma screenshots | `{spec_output_path}/{ticket}/figma-*.png` | From `/figma-screenshot` |
-| Output dir | `{spec_output_path}/{ticket}/validation/` | Created if missing |
+| Figma screenshots | `<spec-dir>/figma-*.png` | From `/figma-screenshot` |
+| Output dir | `<spec-dir>/validation/` | Created if missing |
 
 ## Step 1: Resolve Inputs and Verify Pre-flight
 
 - Parse `{ticket}` from argument.
-- Read `{spec_output_path}/{ticket}/design.md`. Extract:
+- Read `<spec-dir>/design.md`. Extract:
   - Block name and block-scoped class names
   - Variants and modifier classes mentioned in `## Variant CSS`
   - Layout Matrix rows (container, breakpoint, expected `flex-direction` + `gap`)
   - Design Token Mapping table (element → CSS property → token name)
   - Breakpoints to test from the viewports in `breakpoints` (config; skip any breakpoint `design.md` does not cover)
   - Visual Acceptance Checklist
-- List `{spec_output_path}/{ticket}/figma-*.png` to know what to diff against.
+- List `<spec-dir>/figma-*.png` to know what to diff against.
 - Probe content store for the test file (see Step 1b). Create it if missing (only when `mcp.content_store` is set).
 - Local URL to navigate after the file exists: `preview_url_template` (from config).
-- `mkdir -p {spec_output_path}/{ticket}/validation/`.
+- `mkdir -p <spec-dir>/validation/`.
 
 ## Step 1b: Ensure Test Content Exists (auto-create via `mcp.content_store`)
 
@@ -148,8 +158,8 @@ For each viewport in the viewports from `breakpoints` (config) (filter to what `
 1. `new_page` (or `select_page` if already open) → navigate to the block's local preview URL (`preview_url_template` from config).
 2. `emulate` → set viewport width (heights: mobile 667, tablet 1024, desktop 800, wide 900, xl 900).
 3. `wait_for` block's root selector (`.<block-name>`) to render.
-4. `take_snapshot` (DOM + a11y tree) → save to `{spec_output_path}/{ticket}/validation/snapshot-<viewport>.json`.
-5. `take_screenshot` → save as `{spec_output_path}/{ticket}/validation/browser-<viewport>.png`.
+4. `take_snapshot` (DOM + a11y tree) → save to `<spec-dir>/validation/snapshot-<viewport>.json`.
+5. `take_screenshot` → save as `<spec-dir>/validation/browser-<viewport>.png`.
 6. `list_console_messages` → record any errors/warnings.
 7. `list_network_requests` (filter to failures) → record any 4xx/5xx.
 8. `evaluate_script` to read computed styles for each Layout Matrix row:
@@ -202,7 +212,7 @@ Capture exit codes and any failures. Skip the corresponding step if the config v
 
 ## Step 7: Report
 
-Write `{spec_output_path}/{ticket}/validation/report.md`:
+Write `<spec-dir>/validation/report.md`:
 
 ```markdown
 # Validation Report — {ticket}
@@ -280,7 +290,7 @@ Minor deltas (e.g. 1–2px spacing rounding) are recorded but do not fail the ru
 - **Read-only on Figma and the ticket**: no MCP writes.
 - **`mcp.browser` server only for the browser** — no substitution with WebFetch or screenshot scraping.
 - **`mcp.content_store` server only for content store writes** — no curl fallback, no UI automation via the browser MCP.
-- **Idempotent on validation output**: re-running the skill overwrites `{spec_output_path}/{ticket}/validation/` for that ticket. Safe to run on every iteration. Content store files are *not* overwritten — only created when missing.
+- **Idempotent on validation output**: re-running the skill overwrites `<spec-dir>/validation/` for that ticket. Safe to run on every iteration. Content store files are *not* overwritten — only created when missing.
 
 ## Integration with existing agents
 

@@ -65,7 +65,7 @@ For **each** Figma frame that maps to a breakpoint from config (`breakpoints`) (
 - **Primary axis**: horizontal vs vertical (maps to `flex-direction: row` vs `column`, or grid template)
 - **Gap** between children (maps to `gap`)
 - **Alignment** if it affects design (`justify-content`, `align-items`)
-- If a breakpoint matches the previous one for a container, write **explicitly**: *"unchanged from 768px"* in the Layout matrix — do not let implementers infer a missing override
+- If a breakpoint matches the previous one for a container, write **explicitly**: *"unchanged from 768px"* in the Layout Matrix — do not let implementers infer a missing override
 
 **Card / teaser / list groups**: Frame names alone are **not sufficient** — state the **actual** `flex-direction` per breakpoint (Figma is source of truth). If the ticket prose conflicts with Figma layout, flag it in the Report: *"Ticket vs Figma layout conflict — resolve before implementation."* Do not silently prefer prose over Figma.
 
@@ -92,9 +92,9 @@ Use the breakpoints listed in config (`breakpoints`); emit only the breakpoint b
 - Do **not** scatter the same selector across the file; use **one breakpoint ladder** per logical component
 - When desktop differs from tablet for a property (e.g. `flex-direction`), the **desktop** media block MUST set that property again — otherwise the browser keeps the tablet value and the bug is invisible until rendered
 
-### Layout matrix (mandatory section)
+### Layout Matrix (mandatory section)
 
-Add a `## Layout matrix (flex / grid)` section immediately **after** the Code Scaffold section, **before** Design Token Mapping. Use a table derived from Step 2b:
+Add a `## Layout Matrix (flex / grid)` section immediately **after** the Code Scaffold section, **before** Design Token Mapping. Use a table derived from Step 2b:
 
 > **Pack defaults shown** — the column header pixel values (768, 1024, 1280, 1440) are the pack's default breakpoints. Consumers replace these with the actual values from `breakpoints` in `figma-to-code.config.md`.
 
@@ -177,7 +177,7 @@ When the design uses `position: absolute; inset: 0` for both a background elemen
 2. Add a `## Layout Caveats` section flagging the requirement
 3. Use the design's aspect ratios per breakpoint (e.g. 1:3 mobile, 2:3 tablet, 3:2 desktop)
 
-## Layout matrix (flex / grid)
+## Layout Matrix (flex / grid)
 
 [Mandatory table — from Step 2b. Figma auto-layout → `flex-direction` / `gap` / key alignments per container per breakpoint from config (`breakpoints`).]
 
@@ -201,7 +201,7 @@ Always reference L2 (semantic) or L3 (component) tokens per `token_layer_model` 
 | Wide | 1280px | … (omit if no Figma frame) |
 | XL | 1440px | … (omit if no Figma frame) |
 
-Use the breakpoints listed in config (`breakpoints`). For layout-affecting properties (`flex-direction`, `gap`, fixed rail/column widths), restate them in the row even if the Layout matrix already covers them — the matrix is the canonical layout view, this is the prose narrative.
+Use the breakpoints listed in config (`breakpoints`). For layout-affecting properties (`flex-direction`, `gap`, fixed rail/column widths), restate them in the row even if the Layout Matrix already covers them — the matrix is the canonical layout view, this is the prose narrative.
 
 **Inheritance warning:** If desktop should **not** inherit tablet layout, say so explicitly in this section AND in the `@media (width >= 1024px)` CSS block (set the property again).
 
@@ -232,8 +232,8 @@ If a token override is needed for this block in a specific theme, document it he
 ## Visual Acceptance Checklist
 
 - [ ] Mobile (first breakpoint from config `breakpoints`): [specific visual check, e.g. "title and CTA stack vertically with 16px gap"]
-- [ ] Tablet (768px): [specific check, including at least one Layout matrix row]
-- [ ] Desktop (1024px): [specific check, including at least one Layout matrix row]
+- [ ] Tablet (768px): [specific check, including at least one Layout Matrix row]
+- [ ] Desktop (1024px): [specific check, including at least one Layout Matrix row]
 - [ ] Wide (1280px): [if applicable]
 - [ ] Theme checks per config (`themes`): [one entry per theme — token-bound visual check for each; omit section if `themes` is empty]
 - [ ] Hover/focus states render per Interactive States table
@@ -267,7 +267,7 @@ Write to the path resolved from config (`spec_output_path`). Verify the file con
 
 - Source block (ticket + Figma URLs + date)
 - Code Scaffold (HTML + CSS Skeleton in mobile-first order with the scoping mechanism from `component_model`)
-- Layout matrix
+- Layout Matrix
 - Design Token Mapping
 - Breakpoints & Per-Breakpoint CSS Overrides
 - Dynamic Content Elements (with rule applied)
@@ -301,7 +301,7 @@ Any output = token gap. Add each to the "Token Gaps" section in design.md.
 Output a concise report:
 - design.md path
 - Sections present (confirm all mandatory ones)
-- Layout matrix row count
+- Layout Matrix row count
 - Token gaps detected
 - Ticket vs Figma conflicts flagged (if any)
 - Next phase: implementation
@@ -316,7 +316,7 @@ Output a concise report:
 - **Dynamic content**: store only what Figma explicitly has; never convert `width` → `max-width`; omit when unsure
 - **Variant CSS**: when design.md mentions a variant class, include actual property values, not just the class name
 - **Mobile-first file order**: CSS Skeleton MUST follow base → 768 → 1024 → 1280 → 1440 (per `breakpoints` config); never interleave desktop before mobile for the same component
-- **Layout matrix**: MUST exist; implementers use it to avoid missing desktop overrides (e.g. tablet inherits into desktop by default)
+- **Layout Matrix**: MUST exist; implementers use it to avoid missing desktop overrides (e.g. tablet inherits into desktop by default)
 - **Ticket vs Figma**: flag conflicts in the Report; do not overwrite either source
 
 ## Integration
