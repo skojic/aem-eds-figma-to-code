@@ -14,9 +14,9 @@ A portable, EDS/AEM-first skill pack that turns a Figma design into implementati
 
 **Non-goals.**
 - Not extracting the `.agents/` orchestrator pipeline or the CDD glue (out of scope by decision).
-- Not shipping the Merck version as a reference implementation (decision: generalize, not two-layer).
+- Not shipping the originating project's version as a reference implementation (decision: generalize, not two-layer).
 - Not a Claude Code plugin — plain skills repo, copy-paste install.
-- No Merck-identifying content anywhere in the published repo.
+- No originating-project-identifying content anywhere in the published repo.
 
 ## 2. What gets extracted
 
@@ -30,7 +30,7 @@ Three skills, generalized from the source project's `.claude/skills/`:
 
 ### Methodology preserved (the transferable value)
 
-These are kept intact because they transfer beyond Merck:
+These are kept intact because they transfer beyond the originating project:
 
 - **Layout Matrix** — auto-layout facts (flex-direction, gap, alignment) per container per breakpoint; the canonical layout view that prevents "tablet silently inherits into desktop" bugs.
 - **Mobile-first CSS file order** — base rules first, then ascending `@media` ladders; restate layout properties on desktop when they differ from tablet.
@@ -44,14 +44,14 @@ Everything project-specific is lifted out of the SKILL.md files into one config 
 
 | Hardcoded in source | Config field | Notes |
 |---|---|---|
-| `jira-merck`, `figma`, `chrome-devtools`, `da-live` | MCP roles: `ticket_tracker`, `figma`, `browser`, `content_store` | Each optional; `ticket_tracker` and `content_store` can be absent. |
-| `MHDP-NNN`, JIRA browse URL | `ticket_key_pattern`, `ticket_url_base` | Ticket integration optional — a Figma URL alone is enough to run `figma-specify`. |
-| `drafts/specs/MHDP-NNN/design.md` | `spec_output_path` (template) | Supports a `{ticket}` / `{slug}` placeholder. |
-| `merckgroup/desmoidtumours-eu/drafts/skojic/<block>` | `content_path_template` | Only used when a `content_store` MCP is configured. |
-| `http://localhost:3000/drafts/skojic/<block>` | `preview_url_template` | Local render URL for validation. |
-| 5-layer tokens, `styles/styles.css`, `figma.variables.json` | `token_files`, `token_layer_model` (prose) | Layer model described in prose the model reads. |
-| 4 themes | `themes` (list) | Empty list = no theme checks. |
-| 320/768/1024/1280/1440 | `breakpoints` (list of name + min-width) | Drives both spec ladders and validation viewports. |
+| The project's ticket-tracker, Figma, browser, and CMS MCP server names | MCP roles: `ticket_tracker`, `figma`, `browser`, `content_store` | Each optional; `ticket_tracker` and `content_store` can be absent. |
+| Ticket ID pattern and JIRA browse URL | `ticket_key_pattern`, `ticket_url_base` | Ticket integration optional — a Figma URL alone is enough to run `figma-specify`. |
+| Spec output path (ticket-scoped directory + filename) | `spec_output_path` (template) | Supports a `{ticket}` / `{slug}` placeholder. |
+| CMS content path (org/repo/drafts folder for authored blocks) | `content_path_template` | Only used when a `content_store` MCP is configured. |
+| Local preview URL for validation | `preview_url_template` | Local render URL for validation. |
+| The project's token files and token-layer model | `token_files`, `token_layer_model` (prose) | Layer model described in prose the model reads. |
+| The project's theme names | `themes` (list) | Empty list = no theme checks. |
+| The project's breakpoint list | `breakpoints` (list of name + min-width) | Drives both spec ladders and validation viewports. |
 | EDS block model (`@scope`, `decorate(block)`, block-table) | `component_model` (scoping mechanism + entry point + authoring shape) | **EDS documented as the default**; overridable. |
 | `npm run lint` / `npm test` | `lint_cmd`, `test_cmd` | Empty = skip that gate. |
 
@@ -74,7 +74,7 @@ aem-eds-figma-to-code/
 ├── config/
 │   ├── figma-to-code.config.template.md         # every field, blank, with inline guidance
 │   └── examples/
-│       └── eds-example.config.md                # one generic EDS-style filled example (no Merck identifiers)
+│       └── eds-example.config.md                # one generic EDS-style filled example (no originating-project identifiers)
 └── skills/
     ├── figma-specify/SKILL.md
     ├── figma-screenshot/SKILL.md
@@ -85,9 +85,9 @@ aem-eds-figma-to-code/
 
 ## 6. Publish flow
 
-1. Build the repo in `/Users/828108/Projects/aem-eds-figma-to-code` (outside `/Projects/merck/`).
+1. Build the repo in a new folder outside the source project's repo.
 2. Generalize the three SKILL.md files; write config template, generic example, README, `workflow.md`, LICENSE.
-3. **Hard sanitization gate:** grep the whole tree for Merck identifiers — `merck`, `MHDP`, `desmoidtumours`, DA org/repo names, the Figma file key `NWf3jWIl09vadVIRjwKkpf`, any real ticket/URL. Present results to the user. Zero hits required before proceeding.
+3. **Hard sanitization gate:** grep the whole tree for the originating project's identifiers — project name, ticket prefix, CMS org/repo names, the project's Figma file key, any real ticket/URL. Present results to the user. Zero hits required before proceeding.
 4. `git init`, commit.
 5. Switch active gh account to `skojic` (`gh auth switch -u skojic`).
 6. `gh repo create skojic/aem-eds-figma-to-code --public --source . --remote origin --push`.
@@ -103,7 +103,7 @@ aem-eds-figma-to-code/
 ## 8. Success criteria
 
 - Repo `skojic/aem-eds-figma-to-code` exists, is public, and pushed.
-- Three SKILL.md files contain zero Merck identifiers and reference only config roles.
+- Three SKILL.md files contain zero originating-project identifiers and reference only config roles.
 - `config/figma-to-code.config.template.md` covers every field in §3.
 - README explains install + the loop + reuse in a way a stranger can follow.
 - Sanitization grep returns zero hits at publish time.
