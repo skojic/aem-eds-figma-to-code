@@ -1,0 +1,9 @@
+# Internal spec/plan scaffolding — not part of the published pack
+docs/superpowers/
+.superpowers/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+.idea/
+.vscode/
