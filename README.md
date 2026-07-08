@@ -32,7 +32,7 @@ These five practices are encoded in the skills and transfer to any CSS project:
 
 ## EDS/AEM-first, parameterized to adapt
 
-The skills were extracted from a production Adobe Edge Delivery Services (Helix) project, so their defaults reflect that environment. The component model (`@scope`, `export default function decorate(block)`, block-table authoring), token layering (L1 primitives → L2 semantic → L3 component → L4 theme overrides → L5 section backgrounds), and headless-CMS content store are Adobe EDS-shaped.
+The skills were extracted and generalized from real-world Adobe Edge Delivery Services (Helix) work, so their defaults reflect that environment. The component model (`@scope`, `export default function decorate(block)`, block-table authoring), token layering (L1 primitives → L2 semantic → L3 component → L4 theme overrides → L5 section backgrounds), and headless-CMS content store are Adobe EDS-shaped.
 
 The methodology on top transfers to other CSS projects by editing the `component_model` section in the config file. The skills themselves stay unedited; the config is the only project-specific file.
 
@@ -42,6 +42,12 @@ The methodology on top transfers to other CSS projects by editing the `component
 
 1. Copy the three skill directories into your project's `.claude/skills/` folder:
 
+   ```bash
+   cp -r skills/figma-specify skills/figma-screenshot skills/figma-validate <your-project>/.claude/skills/
+   ```
+
+   Expected structure:
+
    ```
    .claude/
    └── skills/
@@ -50,7 +56,7 @@ The methodology on top transfers to other CSS projects by editing the `component
        └── figma-validate/SKILL.md
    ```
 
-2. Copy the config template to your project root and fill it in:
+2. Copy the config template to your project root and fill it in. Run these from the root of a clone of this repo:
 
    ```bash
    cp config/figma-to-code.config.template.md <your-project>/figma-to-code.config.md
