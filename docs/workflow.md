@@ -2,6 +2,12 @@
 
 This document describes the end-to-end loop these three skills support and explains how they fit around your own implementation step.
 
+> **Prefer to see it?** The same loop is available as an interactive diagram:
+> **[Agentic Workflow presentation](https://skojic.github.io/aem-eds-figma-to-code/agentic-workflow/)**.
+> It steps through the files each skill adds to your project, lets you switch the fail-stop gates,
+> MCP calls and subagents on and off, and estimates what the loop costs in context.
+> Source in [`agentic-workflow/`](../agentic-workflow/).
+
 ---
 
 ## Overview
