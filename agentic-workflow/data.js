@@ -23,14 +23,13 @@ const DEFAULT_LAYERS = [
   { id: 'model',  label: 'Model'  },
 ];
 
+/* Only the three hues that carry meaning are listed. Everything else is
+   neutral and labelled in text on the node itself. */
 const KIND_LEGEND = [
-  { kind: 'step',     label: 'Step' },
-  { kind: 'context',  label: 'Config / context' },
-  { kind: 'gate',     label: 'Fail-stop gate' },
-  { kind: 'model',    label: 'Model / decision' },
-  { kind: 'tool',     label: 'MCP tool call' },
-  { kind: 'subagent', label: 'Subagent' },
-  { kind: 'human',    label: 'Your step' },
+  { kind: 'gate',  label: 'Fail-stop gate' },
+  { kind: 'tool',  label: 'MCP tool call' },
+  { kind: 'model', label: 'Model / decision' },
+  { kind: 'step',  label: 'Steps, artifacts, subagents, your step' },
 ];
 
 /* --- Install stages (0 … 7) --------------------------------- */

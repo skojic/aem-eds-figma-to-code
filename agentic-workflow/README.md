@@ -20,21 +20,37 @@ npx serve . -l 4173
 
 ## What's interactive
 
+**Hero pipeline** — a static, at-a-glance view of the toolchain: Jira (`ticket_tracker`) → Figma
+(design source) → Vitest (`test_cmd` gate) → Playwright (browser truth), wrapped in a frame badged
+with the Claude, OpenAI, Gemini and Codex marks. The line under it makes the point explicit: the
+flow is **LLM-agnostic**, and one `figma-to-code.config.md` binds all four tools.
+
 **Control deck (left rail)** — pill chips toggle *Files* (the stage track and explorer card),
 *Diagram* (the phase board) and *Prompt* (the invocation node). Files and Diagram are mutually
 protective: switching one off forces the other on, so the stage is never empty. Below them each
-workflow layer (Config, Gates, MCP, Subagents, Model) has a three-way segmented control: `off`
-hides it, `base` draws the headline path, `ext` additionally reveals the fine-grained chips —
-individual MCP calls, the full fail-stop checklist, per-node detail. Hovering or focusing any
-control explains it in the line below the deck.
+workflow layer (Config, Gates, MCP, Subagents, Model) has a three-way segmented control:
+`off` hides it, `base` draws the headline path, `extended` additionally reveals the fine-grained
+detail — individual MCP calls, the full fail-stop checklist, per-node chips. Hovering or focusing
+any control explains that exact combination in the line below the deck.
 
 **Context gauge (left rail)** — a radial dial over a ~200K budget with a dashed tick at the
-**83.5%** auto-compaction threshold. The composition list underneath itemises what is in the
-payload at the current stage and layer settings: system prompt, cached SKILL.md prefix, config and
-token files, `design.md`, Figma vision tokens, browser snapshots, then conversation messages. The
-dial never reads below that fixed prefix, so the slider only grows the message portion. Past the
-tick the dial turns red and the history block on the board collapses to a `<summary>` — the cached
-skills + config prefix above it survives untouched.
+**83.5%** auto-compaction threshold. It models the payload as a cached prefix plus a conversation:
+
+```
+total = cached prefix + (Conversation length % × remaining headroom)
+```
+
+The prefix is whatever the current stage and layers actually put in the payload — system prompt,
+the SKILL.md files, `figma-to-code.config.md`, token files, `design.md`, Figma vision tokens,
+browser snapshots — itemised in the composition list underneath. Because it is a prefix and not a
+floor, **every toggle moves the dial**: at stage 7 with all layers extended the reading is ~46%,
+dropping to ~39% with Config and MCP off, and the slider at zero exposes the ~24% you pay before
+typing a word. Past the tick the dial turns red and the history block on the board collapses to a
+`<summary>`, while the cached prefix above it survives untouched — which is the argument for
+keeping project specifics in one small config file instead of inlining them into prompts.
+
+The token figures are deliberate estimates, labelled as approximate in the UI; they are there to
+show relative cost, not to be quoted as measurements.
 
 **Stage track** — eight ticks, `0`–`7`, from a plain EDS project to a completed validation run.
 Files appear as they would on disk: the three `SKILL.md` files, `figma-to-code.config.md`, then the
@@ -47,7 +63,25 @@ through stages.
 `01 Specify` (invocation → request payload → fail-stops → `mcp.figma` → layout extraction →
 `design.md` → token-gap pass), `02 Capture & build` (screenshot capture and *your* implementation
 step), `03 Validate` (pre-flight → content store → browser breakpoint loop → visual diff →
-verdict), with the FAIL loop back to phase 02.
+verdict), with the FAIL loop back to phase 02. The request-payload node in lane 01 reacts live to
+the stage, the layer settings and the conversation slider.
+
+## Colour, accessibility and performance
+Colour is deliberately restrained. Only three hues carry meaning on the board — pink for
+fail-stop gates, cyan for MCP tool calls, amber for model decisions — and everything else is
+neutral. Node type is always stated in text as well, so hue is reinforcement, never the sole
+signal. The phase lanes share one neutral accent so they cannot be confused with node types, and
+the controls are entirely monochrome: selection is shown with fill and weight, not hue, so the
+chrome never competes with the board. The saturated brand colours are confined to the hero
+pipeline, where recognition is the point.
+
+- Visible `:focus-visible` rings on every control; the stage track is a tab list, the file tree a
+  `tree`/`treeitem` structure, and each layer control a `radiogroup` with arrow-key navigation.
+- `prefers-reduced-motion: reduce` disables the remaining animations.
+- Body text sits at or above 0.7rem (~11px); the muted and secondary greys clear 4.5:1 on the
+  panel background, and the slider is 26px tall so the pointer target clears 24×24px.
+- No `filter: blur()` layers; the only looping animation left is the small status dot in the
+  eyebrow, and dragging the slider swaps just the payload node rather than rebuilding the board.
 
 ## Files
 

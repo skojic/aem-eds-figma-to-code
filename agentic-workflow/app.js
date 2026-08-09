@@ -17,9 +17,9 @@ const state = {
 };
 
 const MODES = [
-  { id: 'off', label: 'off' },
-  { id: 'base', label: 'base' },
-  { id: 'ext', label: 'ext' },
+  { id: 'off',  label: 'off',      hint: 'hidden from the board entirely' },
+  { id: 'base', label: 'base',     hint: 'headline nodes only' },
+  { id: 'ext',  label: 'extended', hint: 'every call, check and chip' },
 ];
 
 function make(tag, cls, text) {
@@ -74,15 +74,35 @@ function renderControls() {
     if (state.layers[meta.id] !== 'off') row.classList.add('is-on');
 
     const label = make('span', 'seg-row__label');
-    label.innerHTML = `<i></i>${meta.label}`;
+    label.id = `lbl-${meta.id}`;
+    label.innerHTML = `<i aria-hidden="true"></i>${meta.label}`;
 
+    /* A radio group is the correct pattern for one-of-three, and it gives
+       screen readers "2 of 3" position info that aria-pressed cannot. */
     const seg = make('div', 'seg');
-    MODES.forEach((m) => {
+    seg.setAttribute('role', 'radiogroup');
+    seg.setAttribute('aria-labelledby', label.id);
+
+    MODES.forEach((m, i) => {
+      const on = state.layers[meta.id] === m.id;
       const b = make('button', null, m.label);
       b.type = 'button';
-      b.setAttribute('aria-pressed', String(state.layers[meta.id] === m.id));
+      b.dataset.mode = m.id;
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(on));
+      b.setAttribute('aria-label', `${meta.label}: ${m.label} — ${m.hint}`);
+      b.tabIndex = on ? 0 : -1;
       b.addEventListener('click', () => { state.layers[meta.id] = m.id; render(); });
-      bindHint(b, `${meta.label} — ${meta.hint}`);
+      b.addEventListener('keydown', (e) => {
+        const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1
+          : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        state.layers[meta.id] = MODES[(i + step + MODES.length) % MODES.length].id;
+        render();
+        document.querySelector(`#row-layers [aria-labelledby="${label.id}"] [aria-checked="true"]`)?.focus();
+      });
+      bindHint(b, `${meta.label} → ${m.label}: ${m.hint}. ${meta.hint}`);
       seg.append(b);
     });
 
@@ -106,7 +126,8 @@ function bindHint(node, hint) {
 
 function defaultHint() {
   const n = (v) => Object.values(state.layers).filter((x) => x === v).length;
-  return `${n('ext')} ext · ${n('base')} base · ${n('off')} off — base draws the headline path, ext expands every MCP call, gate and subagent.`;
+  return `${n('ext')} extended · ${n('base')} base · ${n('off')} off. `
+    + 'Base draws the headline path; extended expands every MCP call, gate and subagent.';
 }
 
 /* ---------- stage track ------------------------------------- */
@@ -114,11 +135,16 @@ function renderTrack() {
   const el = $('#stepper');
   el.innerHTML = '';
   STAGES.forEach((s) => {
+    const current = s.n === state.stage;
     const b = make('button', 'tick');
     b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(current));
+    b.setAttribute('aria-label', `Stage ${s.n}: ${s.label}`);
+    b.tabIndex = current ? 0 : -1;
     if (s.n < state.stage) b.classList.add('is-done');
-    if (s.n === state.stage) b.classList.add('is-current');
-    b.innerHTML = `<span>${s.n}</span><span>${s.label}</span>`;
+    if (current) b.classList.add('is-current');
+    b.innerHTML = `<span aria-hidden="true">${s.n}</span><span aria-hidden="true">${s.label}</span>`;
     b.addEventListener('click', () => { state.stage = s.n; state.selected = null; render(); });
     el.append(b);
   });
@@ -151,18 +177,23 @@ function renderTree() {
         const isFile = !!child.file;
         const row = make('div', `tree__row ${isFile ? 'tree__row--file' : 'tree__row--dir'}`);
         row.style.paddingLeft = `${8 + depth * 13}px`;
+        row.setAttribute('role', isFile ? 'treeitem' : 'group');
+        row.setAttribute('aria-level', String(depth + 1));
         if (isFile) {
+          const selected = state.selected === child.file.path;
           row.dataset.status = child.file.status;
           if (child.file.stage === state.stage && state.stage > 0) row.classList.add('is-new');
-          if (state.selected === child.file.path) row.classList.add('is-active');
-          row.tabIndex = 0;
-          const pick = () => { state.selected = child.file.path; render(); };
+          if (selected) row.classList.add('is-active');
+          row.setAttribute('aria-selected', String(selected));
+          row.setAttribute('aria-label', `${child.file.path}, ${child.file.status}`);
+          row.tabIndex = selected || !state.selected ? 0 : -1;
+          const pick = () => { state.selected = child.file.path; render(); $('#tree [aria-selected="true"]')?.focus(); };
           row.addEventListener('click', pick);
           row.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
           });
         }
-        row.innerHTML = `<span class="tree__bullet"></span>
+        row.innerHTML = `<span class="tree__bullet" aria-hidden="true"></span>
           <span class="tree__name">${esc(child.name)}${isFile ? '' : '/'}</span>
           ${isFile ? `<span class="tree__badge">${esc(child.file.status)}</span>` : ''}`;
         host.append(row);
@@ -285,8 +316,8 @@ function payloadNode() {
 
   const cfgOn = state.layers.config !== 'off' && state.stage >= 4;
   const tokensOn = state.layers.config === 'ext' && state.stage >= 4;
-  const compacted = state.fill > COMPACT_AT;
-  const historyPct = Math.min(100, Math.max(8, (state.fill / COMPACT_AT) * 100));
+  const { compacted } = usage();
+  const historyPct = Math.min(100, Math.max(8, state.fill));
 
   const rows = [
     {
@@ -319,19 +350,38 @@ function payloadNode() {
   return box;
 }
 
+/* ---------- context usage ------------------------------------
+   The cached prefix is whatever the current stage and layers put in the
+   payload. The slider then fills the remaining headroom with conversation,
+   so installing skills or advancing a stage always moves the dial.
+   ------------------------------------------------------------- */
+function usage() {
+  const active = SEGMENTS.filter((s) => s.when({ ...state, layers: normalisedLayers() }));
+  const fixed = active.reduce((sum, s) => sum + s.tokens, 0);
+  const headroom = BUDGET - fixed;
+  const msgTokens = (state.fill / 100) * headroom;
+  const totalTokens = fixed + msgTokens;
+  const totalPct = (totalTokens / BUDGET) * 100;
+  return {
+    active,
+    fixed,
+    fixedPct: (fixed / BUDGET) * 100,
+    msgTokens,
+    totalTokens,
+    totalPct,
+    compacted: totalPct > COMPACT_AT,
+  };
+}
+
 /* ---------- radial gauge + composition ---------------------- */
 const R = 56;
 const CIRC = 2 * Math.PI * R;
 
 function renderGauge() {
-  const active = SEGMENTS.filter((s) => s.when({ ...state, layers: normalisedLayers() }));
-  const fixed = active.reduce((sum, s) => sum + s.tokens, 0);
-  const fixedPct = (fixed / BUDGET) * 100;
-  const totalPct = Math.min(100, Math.max(state.fill, fixedPct));
-  const compacted = totalPct > COMPACT_AT;
+  const { active, fixed, fixedPct, msgTokens, totalTokens, totalPct, compacted } = usage();
 
   $('#fill-value').textContent = `${Math.round(totalPct)}%`;
-  $('#gauge-cap').textContent = `${((totalPct / 100) * BUDGET / 1000).toFixed(0)}K / 200K`;
+  $('#gauge-cap').textContent = `${(totalTokens / 1000).toFixed(0)}K / ${(BUDGET / 1000).toFixed(0)}K`;
   $('#fill').style.setProperty('--pct', `${state.fill}%`);
 
   const arc = $('#gauge-arc');
@@ -340,28 +390,28 @@ function renderGauge() {
   $('.gauge').classList.toggle('is-over', compacted);
   $('#gauge-tick').style.transform = `rotate(${(COMPACT_AT / 100) * 360}deg)`;
 
+  /* Prefix items first, conversation last — the reading order matches the
+     cache order in the payload node. */
   const list = $('#sim-legend');
   list.innerHTML = '';
-  active.forEach((s) => {
+  const row = (name, tokens, colour, extra = '') => {
     const li = document.createElement('li');
-    li.innerHTML = `<span class="name">${esc(s.label)}</span>
-      <span class="tok">${(s.tokens / 1000).toFixed(1)}K${s.cached ? ' ·c' : ''}</span>
-      <span class="meter"><i style="width:${Math.min(100, (s.tokens / BUDGET) * 100 * 4)}%;background:${tone(s.tone)}"></i></span>`;
+    li.innerHTML = `<span class="name">${esc(name)}</span>
+      <span class="tok">${(tokens / 1000).toFixed(1)}K${extra}</span>
+      <span class="meter"><i style="width:${Math.min(100, (tokens / BUDGET) * 100 * 4)}%;background:${colour}"></i></span>`;
     list.append(li);
-  });
-
-  const msgTokens = Math.max(0, ((totalPct - fixedPct) / 100) * BUDGET);
-  const li = document.createElement('li');
-  li.innerHTML = `<span class="name">conversation messages</span>
-    <span class="tok">${(msgTokens / 1000).toFixed(1)}K</span>
-    <span class="meter"><i style="width:${Math.min(100, (msgTokens / BUDGET) * 100 * 1.6)}%;background:#4d4c61"></i></span>`;
-  list.append(li);
+  };
+  active.forEach((s) => row(s.label, s.tokens, tone(s.tone), s.cached ? ' ·c' : ''));
+  row('conversation messages', msgTokens, '#4d4c61');
 
   const note = $('#sim-note');
   note.classList.toggle('is-warn', compacted);
   note.innerHTML = compacted
-    ? `<strong>Auto-compacted.</strong> History collapses to a summary; the cached skills + config prefix survives untouched.`
-    : `Fixed prefix ${(fixed / 1000).toFixed(1)}K. Auto-compaction fires at <strong>${COMPACT_AT}%</strong>.`;
+    ? `<strong>Auto-compacted.</strong> History collapses to a summary; the cached prefix survives untouched. `
+      + `Approximate token estimates.`
+    : `Cached prefix costs <strong>${(fixed / 1000).toFixed(1)}K (${fixedPct.toFixed(1)}%)</strong> on every turn `
+      + `before you type a word — add layers or advance a stage to watch it grow. `
+      + `Compaction fires at ${COMPACT_AT}%. Approximate token estimates.`;
 }
 
 /* SEGMENTS were written against 'extended'; map 'ext' onto it. */
@@ -404,10 +454,13 @@ function render() {
 }
 
 function boot() {
+  /* The slider only affects the gauge and the payload node, so swap that one
+     node instead of rebuilding all ~17 board nodes on every pointer move. */
   $('#fill').addEventListener('input', (e) => {
     state.fill = Number(e.target.value);
     renderGauge();
-    if (state.diagram) renderBoard();
+    const old = $('#flow [data-node="payload"]');
+    if (old) old.replaceWith(payloadNode());
   });
 
   document.addEventListener('keydown', (e) => {
