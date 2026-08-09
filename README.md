@@ -2,6 +2,8 @@
 
 A portable, EDS/AEM-first Claude Code skill pack for turning Figma designs into implementation-ready CSS/HTML — and validating the result in a real browser.
 
+**[▶ See the interactive workflow presentation](https://skojic.github.io/aem-eds-figma-to-code/agentic-workflow/)** — step through the files the pack adds to your project, toggle each layer of the loop, and watch the context budget fill. Source in [`agentic-workflow/`](agentic-workflow/).
+
 ---
 
 ## What's inside

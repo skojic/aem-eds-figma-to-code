@@ -18,6 +18,11 @@ python3 -m http.server 4173
 npx serve . -l 4173
 ```
 
+Deployed via GitHub Pages (Settings → Pages → deploy from `main`, root) at
+https://skojic.github.io/aem-eds-figma-to-code/agentic-workflow/. All asset paths are relative,
+so the subdirectory works without configuration; a `.nojekyll` marker at the repo root keeps
+Pages from running the files through Jekyll.
+
 ## What's interactive
 
 **Hero pipeline** — a static, at-a-glance view of the toolchain: Jira (`ticket_tracker`) → Figma
