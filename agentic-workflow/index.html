@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Figma → Code — Agentic Workflow</title>
+<meta name="description" content="Interactive walkthrough of the aem-eds-figma-to-code agentic workflow: specify → screenshot → build → validate." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="grid-bg" aria-hidden="true"></div>
+  <div class="glow" aria-hidden="true"></div>
+
+  <header class="hero">
+    <div class="hero__inner">
+      <div class="hero__copy">
+        <p class="eyebrow"><span class="pulse"></span>aem-eds-figma-to-code</p>
+        <h1>Figma frames in.<br /><em>PASS / FAIL</em> out.</h1>
+        <p class="lede">
+          Three explicit-invocation skills, one config file, zero guessing.
+          Dial the layers in the control deck to see exactly what runs on each turn.
+        </p>
+        <dl class="stats">
+          <div><dt>skills</dt><dd>3</dd></div>
+          <div><dt>project-specific files</dt><dd>1</dd></div>
+          <div><dt>fabricated values</dt><dd>0</dd></div>
+        </dl>
+      </div>
+
+      <!-- ── At-a-glance pipeline, driven by any LLM ───────────── -->
+      <figure class="rig">
+        <figcaption class="rig__badge">
+          <span class="prov" data-p="claude" title="Claude / Claude Code">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <g fill="currentColor">
+                <rect x="11" y="1.5" width="2" height="7" rx="1" />
+                <rect x="11" y="1.5" width="2" height="7" rx="1" transform="rotate(45 12 12)" />
+                <rect x="11" y="1.5" width="2" height="7" rx="1" transform="rotate(90 12 12)" />
+                <rect x="11" y="1.5" width="2" height="7" rx="1" transform="rotate(135 12 12)" />
+                <rect x="11" y="1.5" width="2" height="7" rx="1" transform="rotate(180 12 12)" />
+                <rect x="11" y="1.5" width="2" height="7" rx="1" transform="rotate(225 12 12)" />
+                <rect x="11" y="1.5" width="2" height="7" rx="1" transform="rotate(270 12 12)" />
+                <rect x="11" y="1.5" width="2" height="7" rx="1" transform="rotate(315 12 12)" />
+              </g>
+            </svg>
+          </span>
+
+          <span class="prov" data-p="openai" title="OpenAI">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M22.28 9.82a5.98 5.98 0 0 0-.51-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18a5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .75 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.51 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07Zm-9.02 12.61a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.79.79 0 0 0 .4-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.59a4.5 4.5 0 0 1-4.5 4.49ZM3.6 18.3a4.47 4.47 0 0 1-.54-3.01l.15.08 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.34a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.64ZM2.34 7.9a4.49 4.49 0 0 1 2.37-1.98v5.68a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0L4 14.01A4.5 4.5 0 0 1 2.34 7.9Zm16.6 3.85-5.84-3.39L15.12 7.2a.08.08 0 0 1 .07 0l4.83 2.8a4.49 4.49 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.66Zm2.01-3.02-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.07l4.83-2.78a4.5 4.5 0 0 1 6.68 4.66ZM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.15.08-4.77 2.76a.79.79 0 0 0-.4.68Zm1.1-2.36 2.6-1.5 2.6 1.5v3l-2.6 1.5-2.6-1.5Z" />
+            </svg>
+          </span>
+
+          <span class="prov" data-p="gemini" title="Google Gemini">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <defs>
+                <linearGradient id="gem" x1="0" y1="0" x2="24" y2="24">
+                  <stop offset="0" stop-color="#4796E3" />
+                  <stop offset=".5" stop-color="#9177C7" />
+                  <stop offset="1" stop-color="#D96570" />
+                </linearGradient>
+              </defs>
+              <path fill="url(#gem)" d="M12 0c0 6.63 5.37 12 12 12-6.63 0-12 5.37-12 12 0-6.63-5.37-12-12-12C6.63 12 12 6.63 12 0Z" />
+            </svg>
+          </span>
+
+          <span class="prov" data-p="codex" title="OpenAI Codex">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="1.5" y="3.5" width="21" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                    d="m7 9.5 3 2.5-3 2.5" />
+              <path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M12.5 15h4.5" />
+            </svg>
+          </span>
+        </figcaption>
+
+        <ol class="rig__flow">
+          <li class="tile" style="--i:0">
+            <span class="tile__ico" data-brand="jira">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#2684FF" d="M12 1.6 22.4 12 12 22.4l-3.3-3.3L15.8 12 8.7 4.9z" />
+                <path fill="#2684FF" opacity=".5" d="M12 1.6 1.6 12l3.3 3.3L12 8.2z" />
+              </svg>
+            </span>
+            <b>Jira</b>
+            <em>ticket_tracker</em>
+          </li>
+
+          <li class="tile" style="--i:1">
+            <span class="tile__ico" data-brand="figma">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#F24E1E" d="M8 0h4v8H8a4 4 0 010-8z" />
+                <path fill="#FF7262" d="M12 0h4a4 4 0 010 8h-4z" />
+                <circle fill="#1ABCFE" cx="16" cy="12" r="4" />
+                <path fill="#A259FF" d="M8 8h4v8H8a4 4 0 010-8z" />
+                <path fill="#0ACF83" d="M8 16h4v4a4 4 0 11-4-4z" />
+              </svg>
+            </span>
+            <b>Figma</b>
+            <em>design source</em>
+          </li>
+
+          <li class="tile" style="--i:2">
+            <span class="tile__ico" data-brand="vitest">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#FCC72B" d="M13.8 1 4 14h5.4L7.9 23 20 9.6h-5.9z" />
+                <circle fill="#729B1B" cx="19" cy="4" r="3" />
+              </svg>
+            </span>
+            <b>Vitest</b>
+            <em>test_cmd gate</em>
+          </li>
+
+          <li class="tile" style="--i:3">
+            <span class="tile__ico" data-brand="playwright">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path fill="#2EAD33" d="M12 1.5c5.2 0 9.5 3.5 9.5 8.5 0 5.9-4.6 10.3-9.5 12.5C7.1 20.3 2.5 15.9 2.5 10c0-5 4.3-8.5 9.5-8.5z" />
+                <ellipse fill="#0d0c11" cx="8.6" cy="9.4" rx="1.7" ry="2.3" />
+                <ellipse fill="#E2574C" cx="15.4" cy="9.4" rx="1.7" ry="2.3" />
+              </svg>
+            </span>
+            <b>Playwright</b>
+            <em>browser truth</em>
+          </li>
+        </ol>
+
+        <p class="rig__agnostic">
+          This flow is <strong>LLM-agnostic</strong> — any model can drive it.
+        </p>
+        <p class="rig__foot">
+          <span class="mono">figma-to-code.config.md</span> binds all four tools — swap one, edit one file.
+        </p>
+      </figure>
+    </div>
+  </header>
+
+  <main class="workbench">
+
+    <!-- ── Left rail: control deck + gauge ─────────────────────── -->
+    <aside class="rail">
+      <section class="card card--deck">
+        <h2 class="card__title">Control deck</h2>
+
+        <div class="deck__group">
+          <span class="deck__label">View</span>
+          <div class="chips" id="row-view"></div>
+        </div>
+
+        <div class="deck__group">
+          <span class="deck__label">Layers</span>
+          <div class="segments" id="row-layers"></div>
+        </div>
+
+        <p class="deck__hint" id="controls-hint"></p>
+      </section>
+
+      <section class="card card--gauge">
+        <h2 class="card__title">Context fill</h2>
+
+        <div class="gauge">
+          <svg viewBox="0 0 132 132" class="gauge__svg" aria-hidden="true">
+            <circle class="gauge__track" cx="66" cy="66" r="56" />
+            <circle class="gauge__value" id="gauge-arc" cx="66" cy="66" r="56" />
+            <line class="gauge__tick" id="gauge-tick" x1="66" y1="3" x2="66" y2="17" />
+          </svg>
+          <div class="gauge__center">
+            <output id="fill-value">30%</output>
+            <span id="gauge-cap">of ~200K</span>
+          </div>
+        </div>
+
+        <input id="fill" class="slider" type="range" min="0" max="100" step="0.5" value="30"
+               aria-label="Simulate context fill" />
+
+        <ul class="comp" id="sim-legend"></ul>
+        <p class="deck__note" id="sim-note"></p>
+      </section>
+
+      <section class="card card--legend">
+        <h2 class="card__title">Node types</h2>
+        <ul class="keys" id="kind-legend"></ul>
+      </section>
+    </aside>
+
+    <!-- ── Stage: files + board ────────────────────────────────── -->
+    <div class="stage">
+
+      <section class="card card--track" id="panel-files">
+        <div class="track__head">
+          <h2 class="card__title">Project on disk</h2>
+          <span class="track__hint mono">← / → to step</span>
+        </div>
+
+        <div class="track" id="stepper"></div>
+        <p class="track__caption" id="stepper-caption"></p>
+
+        <div class="explorer">
+          <div class="tree" id="tree"></div>
+          <aside class="detail" id="detail"></aside>
+        </div>
+      </section>
+
+      <section class="board" id="panel-diagram">
+        <div class="lanes" id="flow"></div>
+      </section>
+
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span class="mono">specify → screenshot → build → validate</span>
+    <span class="mono">MIT</span>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
