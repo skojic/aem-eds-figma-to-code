@@ -107,3 +107,23 @@ aem-eds-figma-to-code/
 - `config/figma-to-code.config.template.md` covers every field in §3.
 - README explains install + the loop + reuse in a way a stranger can follow.
 - Sanitization grep returns zero hits at publish time.
+
+---
+
+## Addendum — 2026-08-09: interactive presentation
+
+Added after the design above was implemented, so §5 no longer lists the full tree.
+
+`agentic-workflow/` holds a single-page, dependency-free presentation of the loop, published via
+GitHub Pages at
+**<https://skojic.github.io/aem-eds-figma-to-code/agentic-workflow/>**.
+
+It is documentation, not part of the skill pack — nothing in `skills/` or `config/` depends on it,
+and it is not copied into a consuming project. It visualises the same loop `docs/workflow.md`
+describes: the files each skill adds to a project across eight install stages, the fail-stop gates,
+MCP calls and subagents as toggleable layers, and an estimate of what the cached prefix costs in
+context on every turn.
+
+Stack: `index.html`, `styles.css`, `data.js` (all content), `app.js` (renderers). No build step and
+no dependencies beyond a webfont; asset paths are relative so the subdirectory deploy needs no
+configuration, and a `.nojekyll` marker at the repo root keeps Pages from processing the tree.
