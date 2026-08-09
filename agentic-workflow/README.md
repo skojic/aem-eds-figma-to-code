@@ -26,9 +26,10 @@ Pages from running the files through Jekyll.
 ## What's interactive
 
 **Hero pipeline** — a static, at-a-glance view of the toolchain: Jira (`ticket_tracker`) → Figma
-(design source) → Vitest (`test_cmd` gate) → Playwright (browser truth), wrapped in a frame badged
-with the Claude, OpenAI, Gemini and Codex marks. The line under it makes the point explicit: the
-flow is **LLM-agnostic**, and one `figma-to-code.config.md` binds all four tools.
+(design source) → Vitest (`test_cmd` gate) → Browser (`mcp.browser`), wrapped in a frame badged
+with the Claude, OpenAI, Gemini and Codex marks. The line under it is deliberately precise: the
+**methodology is portable**, but this pack ships as Claude Code skills — and one
+`figma-to-code.config.md` binds all four tools.
 
 **Control deck (left rail)** — pill chips toggle *Files* (the stage track and explorer card),
 *Diagram* (the phase board) and *Prompt* (the invocation node). Files and Diagram are mutually

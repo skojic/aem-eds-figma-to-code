@@ -32,8 +32,8 @@ against this config — not against any hardcoded project.
 
 ## Pre-flight
 
-1. **Ticket fetched.** This skill must run after the `mcp.ticket_tracker` server has fetched the `{ticket}` ticket matching `ticket_key_pattern`. If no ticket context is loaded, stop and instruct the user to fetch the ticket first.
-2. **Figma reference identified.** Either a Figma URL provided by the user, a link in the ticket, or `figma-design-extractor` agent output.
+1. **Ticket fetched — only when `mcp.ticket_tracker` is configured.** If it is set, this skill must run after that server has fetched the `{ticket}` ticket matching `ticket_key_pattern`; if no ticket context is loaded, stop and instruct the user to fetch the ticket first. If `mcp.ticket_tracker` is empty, skip this check — a Figma URL and a slug are enough.
+2. **Figma reference identified.** Either a Figma URL provided by the user or a link in the ticket.
 3. **Block name known.** Resolve from ticket, user input, or feature description. EDS blocks use lowercase hyphenated names (e.g. `teaser`, `link-list`, `language-selector`).
 
 ## Step 1: Resolve Output Directory
@@ -77,13 +77,13 @@ Before writing each CSS rule: if the selector targets a Dynamic Content Element 
 
 The **CSS Skeleton** section MUST emit rules in this **physical order** so the cascade matches the mobile-first mental model and reviews stay predictable.
 
-The ladder is driven by the `breakpoints` list in `figma-to-code.config.md`. The pack ships with five default breakpoints — 320, 768, 1024, 1280, and 1440 px — but the actual values for **this project** come from config, so always resolve from there.
+The ladder is driven **entirely** by the `breakpoints` list in `figma-to-code.config.md` — emit one block per configured breakpoint, ascending, and nothing else. The pixel values used throughout this document (768, 1024, 1280, 1440) are illustrative only; the config template ships with three breakpoints and a project may define any number.
 
 1. **Base (mobile, first breakpoint from config)** — all rules **without** `@media`, scoped via the mechanism in `component_model` (default `@scope`). No desktop-only values here.
-2. **`@media (width >= <2nd breakpoint from config>)`** — next-up overrides (pack default: 768 px)
-3. **`@media (width >= <3rd breakpoint from config>)`** — next-up overrides (pack default: 1024 px)
-4. **`@media (width >= <4th breakpoint from config>)`** — only if Figma includes a frame at this width (pack default: 1280 px)
-5. **`@media (width >= <5th breakpoint from config>)`** — only if Figma includes an XL frame (pack default: 1440 px)
+2. **`@media (width >= <2nd breakpoint from config>)`** — next-up overrides (e.g. 768 px)
+3. **`@media (width >= <3rd breakpoint from config>)`** — next-up overrides (e.g. 1024 px)
+4. **`@media (width >= <4th breakpoint from config>)`** — only if config defines one and Figma includes a frame at this width (e.g. 1280 px)
+5. **Any further breakpoints from config** — same rule: only when Figma provides a frame
 
 Use the breakpoints listed in config (`breakpoints`); emit only the breakpoint blocks for which Figma provides frames.
 
@@ -96,7 +96,7 @@ Use the breakpoints listed in config (`breakpoints`); emit only the breakpoint b
 
 Add a `## Layout Matrix (flex / grid)` section immediately **after** the Code Scaffold section, **before** Design Token Mapping. Use a table derived from Step 2b:
 
-> **Pack defaults shown** — the column header pixel values (768, 1024, 1280, 1440) are the pack's default breakpoints. Consumers replace these with the actual values from `breakpoints` in `figma-to-code.config.md`.
+> **Illustrative values** — the column header pixel values (768, 1024, 1280, 1440) are examples. Use one column per breakpoint defined in `breakpoints` in `figma-to-code.config.md`.
 
 | Container (block-scoped class) | Mobile (base) | Tablet (≥768px) | Desktop (≥1024px) | Wide (≥1280px) | XL (≥1440px) |
 |---|---|---|---|---|---|
@@ -123,9 +123,9 @@ Include **every** flex/grid wrapper that changes or could be misread across brea
 
 ### CSS Skeleton
 
-All new block CSS MUST use the scoping mechanism from `component_model` (default `@scope`) per project convention in `CLAUDE.md`. The Figma root frame maps to the block wrapper `<div class="blockname">`. Authored content renders as nested `<div>` rows/columns inside the wrapper.
+All new block CSS MUST use the scoping mechanism described in `component_model` (default `@scope`). The Figma root frame maps to the block wrapper `<div class="blockname">`. Authored content renders as nested `<div>` rows/columns inside the wrapper.
 
-> **Pack defaults shown** — the pixel values in this skeleton (768, 1024, 1280) are the pack's default breakpoints. Always substitute the actual values from `breakpoints` in `figma-to-code.config.md`.
+> **Illustrative values** — the pixel values in this skeleton (768, 1024, 1280) are examples. Always substitute the actual values from `breakpoints` in `figma-to-code.config.md`.
 
 ```css
 @scope (.blockname) {
@@ -141,21 +141,21 @@ All new block CSS MUST use the scoping mechanism from `component_model` (default
     color: var(--text-color);
   }
 
-  /* 2. Tablet (pack default: 768px — use config value) */
+  /* 2. Tablet (example: 768px — use the config value) */
   @media (width >= 768px) {
     .blockname-content {
       /* tablet overrides */
     }
   }
 
-  /* 3. Desktop (pack default: 1024px — use config value) */
+  /* 3. Desktop (example: 1024px — use the config value) */
   @media (width >= 1024px) {
     .blockname-content {
       /* desktop overrides — set again if different from tablet */
     }
   }
 
-  /* 4. Wide (pack default: 1280px — use config value; only if Figma has a frame at this width) */
+  /* 4. Wide (example: 1280px — only if config defines it and Figma has a frame at this width) */
   @media (width >= 1280px) {
     /* … */
   }
@@ -248,7 +248,7 @@ If a token override is needed for this block in a specific theme, document it he
 
 - Block wrapper: outer `<div class="blockname">` is added by EDS auto-decoration
 - This block's `decorate(block)` reshapes the authored structure (rows/columns from the block table) into the final semantic HTML
-- Block options (variants, e.g. `(reversed, dark)`) are added as classes on the wrapper — handle in `decorate()` per `building-blocks` skill
+- Block options (variants, e.g. `(reversed, dark)`) are added as classes on the wrapper — handle them in `decorate()`
 - ARIA attributes/roles go on decorated elements
 - Decoration must be idempotent (re-running `decorate` on the same block must not break it)
 
@@ -315,7 +315,7 @@ Output a concise report:
 - Map Figma values to tokens from the token files listed in config (`token_files`) at L2/L3 per `token_layer_model`; never L1 directly in block CSS
 - **Dynamic content**: store only what Figma explicitly has; never convert `width` → `max-width`; omit when unsure
 - **Variant CSS**: when design.md mentions a variant class, include actual property values, not just the class name
-- **Mobile-first file order**: CSS Skeleton MUST follow base → 768 → 1024 → 1280 → 1440 (per `breakpoints` config); never interleave desktop before mobile for the same component
+- **Mobile-first file order**: CSS Skeleton MUST follow base → each configured breakpoint in ascending order (per `breakpoints` in config); never interleave desktop before mobile for the same component
 - **Layout Matrix**: MUST exist; implementers use it to avoid missing desktop overrides (e.g. tablet inherits into desktop by default)
 - **Ticket vs Figma**: flag conflicts in the Report; do not overwrite either source
 
@@ -327,6 +327,6 @@ Runs standalone after the ticket (if any) is fetched. Produces only the `design.
 
 - Does not modify tickets
 - Does not write block JS or CSS — only the `design.md` reference artifact
-- Does not extract or update global tokens (that is `figma-design-extractor` / `design-system-analyzer`)
+- Does not extract or update global design tokens — it only reports token gaps for you to resolve
 - Does not run lint, dev server, or browser checks
 - Does not create a feature branch or commit files

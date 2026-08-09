@@ -85,7 +85,7 @@ The methodology on top transfers to other CSS projects by editing the `component
     → renders at every breakpoint, diffs vs spec + screenshots, PASS/FAIL
 ```
 
-Full prerequisites, exact invocations, and fail-stop behaviour are documented in [docs/workflow.md](docs/workflow.md).
+Full prerequisites, exact invocations, and fail-stop behaviour are documented in [docs/workflow.md](docs/workflow.md). The rationale behind the pack — what was generalized, what became config, and why — is in [docs/DESIGN.md](docs/DESIGN.md).
 
 ---
 

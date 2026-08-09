@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://skojic.github.io/aem-eds-figma-to-code/agentic-workflow/preview.png" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
-<meta property="og:image:alt" content="Figma frames in, PASS / FAIL out — with the Jira, Figma, Vitest and Playwright pipeline." />
+<meta property="og:image:alt" content="Figma frames in, PASS / FAIL out — with the Jira, Figma, Vitest and browser MCP pipeline." />
 <meta name="twitter:card" content="summary_large_image" />
 
 <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -47,11 +47,11 @@
         </dl>
       </div>
 
-      <!-- ── At-a-glance pipeline, driven by any LLM ───────────── -->
+      <!-- ── At-a-glance view of the toolchain ────────────────── -->
       <div class="hero__aside">
       <figure class="rig">
         <figcaption class="rig__badge">
-          <span class="sr-only">Runs on any large language model, including:</span>
+          <span class="sr-only">The methodology is not tied to one model:</span>
           <span class="prov" data-p="claude" role="img" aria-label="Claude">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <g fill="currentColor">
@@ -134,20 +134,23 @@
           </li>
 
           <li class="tile" style="--i:3">
-            <span class="tile__ico" data-brand="playwright">
+            <span class="tile__ico" data-brand="browser">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#2EAD33" d="M12 1.5c5.2 0 9.5 3.5 9.5 8.5 0 5.9-4.6 10.3-9.5 12.5C7.1 20.3 2.5 15.9 2.5 10c0-5 4.3-8.5 9.5-8.5z" />
-                <ellipse fill="#0d0c11" cx="8.6" cy="9.4" rx="1.7" ry="2.3" />
-                <ellipse fill="#E2574C" cx="15.4" cy="9.4" rx="1.7" ry="2.3" />
+                <rect x="2" y="3.5" width="20" height="17" rx="3" fill="none" stroke="#80ffea" stroke-width="1.7" />
+                <path d="M2 8.6h20" stroke="#80ffea" stroke-width="1.7" />
+                <circle cx="5.2" cy="6" r=".9" fill="#80ffea" />
+                <circle cx="8" cy="6" r=".9" fill="#80ffea" />
+                <path d="M10.6 15.4a3.1 3.1 0 1 1 4.4-4.4 3.1 3.1 0 0 1-4.4 4.4zm4 0 3 3"
+                      fill="none" stroke="#80ffea" stroke-width="1.7" stroke-linecap="round" />
               </svg>
             </span>
-            <b>Playwright</b>
-            <em>browser truth</em>
+            <b>Browser</b>
+            <em>mcp.browser</em>
           </li>
         </ol>
 
         <p class="rig__agnostic">
-          This flow is <strong>LLM-agnostic</strong> — any model can drive it.
+          The <strong>methodology is portable</strong> — this pack ships as Claude Code skills.
         </p>
         <p class="rig__foot">
           <span class="mono">figma-to-code.config.md</span> binds all four tools — swap one, edit one file.
