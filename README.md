@@ -18,6 +18,35 @@ Three Claude Code skills that implement a Figma → spec → build → validate 
 
 The skills produce the **spec** and the **check**. Writing the actual block code from `design.md` is your step — see [docs/workflow.md](docs/workflow.md).
 
+### The verdict is decided by code, not by the model
+
+`figma-validate` gathers evidence — computed styles at each breakpoint, token
+resolutions, console and network state, lint and test exit codes — writes it to
+`validation/evidence.json`, and then runs a tested core over it:
+
+```bash
+node skills/figma-validate/lib/cli.mjs <spec-dir>/validation/evidence.json
+# exit 0 PASS · 1 FAIL · 2 could not evaluate
+```
+
+`lib/compare.mjs` normalises units before comparing, so `2rem` matches `32px`,
+`gap: normal` matches `0px`, and a `flex-flow` reading of `row nowrap` matches
+`row`. `lib/verdict.mjs` applies the PASS/FAIL rules. Both are plain ESM with
+no dependencies, typed via JSDoc and covered by `npm test`.
+
+The third exit code is the point: **a gate that cannot evaluate its input must
+not report a result.** No viewports captured or a malformed evidence file exits
+2 rather than emitting a verdict nobody earned.
+
+The one judgement left is the visual diff against the Figma reference, and it is
+labelled as a judgement. See [docs/TESTING.md](docs/TESTING.md) for what is
+tested, what is deliberately not, and why.
+
+```bash
+npm test            # verdict core · skill contracts · presentation data · docs vs diagram
+npm run typecheck   # JSDoc types via checkJs — no build step, no emitted output
+```
+
 ---
 
 ## The methodology
@@ -74,16 +103,22 @@ The methodology on top transfers to other CSS projects by editing the `component
 
 ```
 /figma-specify <ticket-or-slug>
-    → writes design.md (Layout Matrix, CSS Skeleton, Token Mapping)
+    → design.md           the spec, for you
+    → design.matrix.json  the Layout Matrix, structured for the gate
 
 /figma-screenshot <ticket-or-slug> <figma-url>
-    → saves figma-*.png beside design.md (once per major frame)
+    → figma-*.png         beside design.md (once per major frame)
 
 [ implement the block from design.md — your step ]
 
 /figma-validate <ticket-or-slug>
-    → renders at every breakpoint, diffs vs spec + screenshots, PASS/FAIL
+    → browser-*.png · snapshot-*.json
+    → evidence.json       everything gathered, before anything is decided
+    → node lib/cli.mjs evidence.json
+    → report.md           the verdict and a remediation checklist
 ```
+
+Everything lands in the directory `spec_output_path` resolves to, with the validation artifacts in a `validation/` subfolder. The order inside it is the point: **gather, write it all down, then adjudicate.**
 
 Full prerequisites, exact invocations, and fail-stop behaviour are documented in [docs/workflow.md](docs/workflow.md). The rationale behind the pack — what was generalized, what became config, and why — is in [docs/DESIGN.md](docs/DESIGN.md).
 
@@ -94,6 +129,7 @@ Full prerequisites, exact invocations, and fail-stop behaviour are documented in
 | Requirement | Role | Notes |
 |---|---|---|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | skill runner | Required. |
+| Node.js 18+ | runs the verdict core | Required for `figma-validate` — it shells out to `lib/cli.mjs`. No packages to install: the modules are dependency-free ESM. If `node` is not on PATH the skill fail-stops rather than adjudicating the checks by hand. |
 | Figma MCP | `mcp.figma` in config | Required. Used by `figma-specify` and `figma-screenshot`. |
 | Browser MCP | `mcp.browser` in config | Required for `figma-validate` (e.g. `chrome-devtools` MCP). |
 | Ticket-tracker MCP | `mcp.ticket_tracker` in config | Optional. If absent, pass a Figma URL directly to `/figma-specify`. |

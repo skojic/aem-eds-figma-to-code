@@ -1,0 +1,19 @@
+{
+  "name": "aem-eds-figma-to-code",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portable, EDS/AEM-first Claude Code skill pack: Figma designs to implementation-ready CSS/HTML, validated in a real browser.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "comment": "Dev dependencies only. The skill pack itself is copy-paste Markdown plus dependency-free ESM, and agentic-workflow/ stays dependency-free at runtime — see docs/DESIGN.md."
+}

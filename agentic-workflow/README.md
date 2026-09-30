@@ -26,10 +26,15 @@ Pages from running the files through Jekyll.
 ## What's interactive
 
 **Hero pipeline** — a static, at-a-glance view of the toolchain: Jira (`ticket_tracker`) → Figma
-(design source) → Vitest (`test_cmd` gate) → Browser (`mcp.browser`), wrapped in a frame badged
-with the Claude, OpenAI, Gemini and Codex marks. The line under it is deliberately precise: the
-**methodology is portable**, but this pack ships as Claude Code skills — and one
+(design source) → Vitest (`npm test` over the verdict core) → Browser (`mcp.browser`), wrapped in a
+frame badged with the Claude, OpenAI, Gemini and Codex marks. The line under it is deliberately
+precise: the **methodology is portable**, but this pack ships as Claude Code skills — and one
 `figma-to-code.config.md` binds all four tools.
+
+The Vitest tile refers to the pack's **own** suite — the tested modules in
+`skills/figma-validate/lib/` that decide the verdict. It is not the same thing as `test_cmd` in a
+consuming project, which is an optional config hook that reports `skipped` when empty. Conflating
+the two is exactly what an earlier version of this page did.
 
 **Control deck (left rail)** — pill chips toggle *Files* (the stage track and explorer card),
 *Diagram* (the phase board) and *Prompt* (the invocation node). Files and Diagram are mutually
@@ -60,17 +65,29 @@ show relative cost, not to be quoted as measurements.
 
 **Stage track** — eight ticks, `0`–`7`, from a plain EDS project to a completed validation run.
 Files appear as they would on disk: the three `SKILL.md` files, `figma-to-code.config.md`, then the
-generated `design.md`, Figma PNGs, your block source and the validation artifacts; newly added
+generated `design.md` and its `design.matrix.json` sidecar, Figma PNGs, your block source, and the
+validation artifacts — screenshots, DOM snapshots, `evidence.json` and `report.md`; newly added
 files animate in. Click a file — or focus it and press Enter/Space — to see what it contributes;
 the board node it drives lights up, and files with no board counterpart say so. `←` / `→` step
 through stages.
 
+Note that the tree is a **consuming project**, not this repository. The `package.json` shown at
+stage 0 is the one in *your* project, supplying `lint_cmd`. This pack's own `test/` directory is
+deliberately absent: it is repo infrastructure and is never copied into a project.
+
 **Phase board** — three side-by-side lanes instead of one long stack:
 `01 Specify` (invocation → request payload → fail-stops → `mcp.figma` → layout extraction →
 `design.md` → token-gap pass), `02 Capture & build` (screenshot capture and *your* implementation
-step), `03 Validate` (pre-flight → content store → browser breakpoint loop → visual diff →
-verdict), with the FAIL loop back to phase 02. The request-payload node in lane 01 reacts live to
-the stage, the layer settings and the conversation slider.
+step), `03 Validate` (pre-flight → content store → browser breakpoint loop → computed-style
+comparison → visual diff → `node lib/cli.mjs` → verdict), with the FAIL loop back to phase 02. The
+request-payload node in lane 01 reacts live to the stage, the layer settings and the conversation
+slider.
+
+Lane 03 is where the verdict changed hands. The **computed-style comparison** node sits under
+*Subagents* at `extended` and the **`node lib/cli.mjs`** gate under *Gates* at `base` — so to see
+both, set Subagents to `extended`. Phase 03 now has no model-decision node at all, which is the
+accurate picture: the only judgement left in that lane is the visual diff, and it is labelled as
+one.
 
 ## Colour, accessibility and performance
 Colour is deliberately restrained. Only three hues carry meaning on the board — pink for

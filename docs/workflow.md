@@ -13,13 +13,51 @@ This document describes the end-to-end loop these three skills support and expla
 ## Overview
 
 ```
-/figma-specify <ticket-or-slug>      ← extract design context from Figma
+/figma-specify <ticket-or-slug>                  ← extract design context from Figma
+    → design.md              (the spec, for you)
+    → design.matrix.json     (the Layout Matrix, for the gate)
+
 /figma-screenshot <ticket-or-slug> <figma-url>   ← save Figma frames as PNG evidence
+    → figma-<slug>-<viewport>.png
+
 [ implement the block from design.md — YOUR step ]
-/figma-validate <ticket-or-slug>     ← verify the live block against spec + Figma
+
+/figma-validate <ticket-or-slug>                 ← gather evidence, then let code decide
+    → browser-<viewport>.png · snapshot-<viewport>.json
+    → evidence.json          (everything gathered, before anything is decided)
+    → node lib/cli.mjs evidence.json → exit 0 PASS · 1 FAIL · 2 could not evaluate
+    → report.md              (the verdict and a remediation checklist)
 ```
 
 The skills produce the **spec** (`design.md`) and the **check** (PASS/FAIL report). They do not write block JavaScript or CSS — that is the implementation step between screenshot capture and validation.
+
+**Two artifacts exist for the gate rather than for you.** `design.matrix.json` is the Layout Matrix in structured form, and `evidence.json` is everything `/figma-validate` observed, written before any verdict is reached. Both are there so the decision is made by tested code over a recorded input rather than by a model re-reading prose — see [TESTING.md](TESTING.md).
+
+---
+
+## The board, lane by lane
+
+The [presentation](https://skojic.github.io/aem-eds-figma-to-code/agentic-workflow/) renders the
+same three phases as side-by-side lanes. In reading order:
+
+**01 Specify** — invocation → model request payload → pre-flight fail-stops → `mcp.figma` → layout
+extraction → **`design.md` + `design.matrix.json` written** → token-gap pass.
+
+**02 Capture & build** — `/figma-screenshot` → `figma-*.png` saved → **your implementation step**.
+
+**03 Validate** — pre-flight fail-stops → content store → browser breakpoint loop → visual diff →
+computed-style comparison → **`evidence.json` written** → `node lib/cli.mjs` → PASS / FAIL, with the
+FAIL branch looping back into phase 02.
+
+The two emphasised nodes are the ones worth reading the order around. Lane 01 produces both the
+spec and its sidecar in one step. Lane 03 separates **gathering** from **deciding**: everything
+observed is written down first, and only then does a tested module read that file and reach a
+verdict. Lane 03 contains no model-decision node at all — the only judgement left in it is the
+visual diff, which is labelled as one.
+
+**Two nodes are hidden by default.** The computed-style comparison sits under *Subagents* at
+`extended`, and the `node lib/cli.mjs` gate under *Gates* at `base`. If lane 03 looks like it goes
+straight from the browser loop to a verdict, turn Subagents up to `extended`.
 
 ---
 
@@ -29,6 +67,7 @@ Before running any skill, confirm:
 
 - [ ] `figma-to-code.config.md` exists at your project root (fallback: `.claude/figma-to-code.config.md`). See the [config template](../config/figma-to-code.config.template.md) and the [generic EDS example](../config/examples/eds-example.config.md).
 - [ ] The Figma MCP (configured as `mcp.figma`) is connected and authenticated.
+- [ ] For `/figma-validate`: `node` is on PATH — it runs the verdict core in `skills/figma-validate/lib/`. Nothing to install; those modules are dependency-free ESM.
 - [ ] For `/figma-validate`: the browser MCP (configured as `mcp.browser`) is connected.
 - [ ] For `/figma-validate`: your local dev server is running (or can be started by the skill).
 - [ ] If you use a ticket-tracker MCP (`mcp.ticket_tracker`), the ticket has been fetched before calling `/figma-specify`.
@@ -57,6 +96,61 @@ Reads the Figma file referenced in the ticket (or supplied directly), extracts v
 - Token Gaps — any value present in Figma but absent from the design-system token files
 - Visual Acceptance Checklist
 
+### The sidecar pattern
+
+A **sidecar** is a secondary file stored next to a primary one, carrying the same information in a
+different shape for a different reader. Generated together, kept together, deleted together —
+neither is the authoritative one; they have different audiences. The name is the motorcycle image:
+attached to the main vehicle, travelling with it, not the vehicle itself.
+
+The familiar example is a source map. `bundle.min.js` ships with `bundle.min.js.map` beside it:
+the minified file is what runs, the map is what the browser's developer tools read to show original
+line numbers. Nobody reconstructs the original by parsing the minified output — that would be
+fragile for no reason, so the build emits both.
+
+Same reasoning here:
+
+| File | Reader | Shape |
+|---|---|---|
+| `design.md` | a person, during implementation | Markdown — prose, tables, a checklist |
+| `design.matrix.json` | `/figma-validate` | JSON — one row per container per breakpoint |
+
+Three options were considered. **Markdown only**, with the gate parsing the table, was rejected:
+that table is generated by this skill, so the gate would depend on the shape of its own output, and
+a reordered column would silently stop a row being checked. **JSON only**, rendering the table from
+it, was rejected because `design.md` exists to be read by a person and reading layout rules out of
+JSON is worse. **Both, emitted together** was chosen.
+
+The cost is real: two files carrying the same facts can drift. That is why a disagreement between
+them is defined as a defect in this skill rather than a tolerable difference — they come from one
+extraction, so there is no legitimate way for them to differ.
+
+*Note that "sidecar" means something else in Kubernetes — a helper container alongside the main one
+in the same pod. Same metaphor, different referent.*
+
+### What the sidecar contains
+
+**`design.matrix.json`** goes into the same directory as `design.md`: one row per container per breakpoint, holding only the properties that breakpoint actually sets, with `inherited: true` where the table says *"unchanged from …"*.
+
+```json
+{
+  "block": "teaser",
+  "breakpoints": [{ "name": "mobile", "min": 320 }, { "name": "tablet", "min": 768 }],
+  "rows": [
+    { "container": ".teaser-inner", "breakpoint": "768",
+      "declarations": "flex-direction: row; gap: 32px", "inherited": false },
+    { "container": ".teaser-inner", "breakpoint": "1024",
+      "declarations": "", "inherited": true }
+  ]
+}
+```
+
+`/figma-validate` reads that file and never the markdown table. The table is generated by this skill, so parsing it back would mean parsing our own output — which breaks the first time a column is reordered or a cell reworded, and breaks silently, as a row that quietly stops being checked while the report still says PASS.
+
+An `inherited` row is not the same as a row repeating the inherited values. It asserts that the breakpoint sets **no override**, so the gate treats a difference there as information rather than a defect — copying the values down would assert an override the CSS does not make, and the gate would then fail a correct implementation.
+
+If the table and the sidecar ever disagree, that is a defect in this skill rather than a tolerable difference: both are produced from the same extraction.
+
 **Invocation:**
 
 ```
@@ -64,7 +158,7 @@ Reads the Figma file referenced in the ticket (or supplied directly), extracts v
 /figma-specify my-component
 ```
 
-The skill resolves the output path from `spec_output_path` in config (e.g. `drafts/specs/PROJ-123/design.md`). If the file already exists it asks before overwriting.
+The skill resolves the output path from `spec_output_path` in config (e.g. `drafts/specs/PROJ-123/design.md`), and writes `design.matrix.json` beside it. If either file already exists it asks before overwriting.
 
 **Fail-stop conditions:**
 - `figma-to-code.config.md` missing → STOP, point to template.
@@ -116,7 +210,11 @@ The skills have no involvement in this step.
 
 **What it does:**
 
-Drives the browser MCP to render the authored test content at each configured breakpoint. Compares browser screenshots against the Figma reference PNGs, spot-checks computed styles from the Layout Matrix via `evaluate_script`, resolves token values, surfaces console errors and failed network requests, runs lint and tests, then emits a PASS/FAIL verdict with a remediation list.
+Drives the browser MCP to render the authored test content at each configured breakpoint. Compares browser screenshots against the Figma reference PNGs, spot-checks computed styles from `design.matrix.json` via `evaluate_script`, resolves token values, surfaces console errors and failed network requests, and runs lint and tests.
+
+It then writes everything it observed to `evidence.json` and **runs a tested module over that file to reach the verdict**. The skill gathers; code decides.
+
+The comparison itself goes through `lib/compare.mjs`, which normalises before comparing — so `2rem` matches `32px`, `gap: normal` matches `0px`, and a `flex-flow` reading of `row nowrap` matches `row`. Comparing the strings directly produces false failures on every one of those.
 
 **Invocation:**
 
@@ -127,25 +225,35 @@ Drives the browser MCP to render the authored test content at each configured br
 
 **Pre-flight (fail-stop if any is missing):**
 1. `design.md` exists at the configured `spec_output_path` for this ticket/slug. If not: run `/figma-specify` first.
-2. At least one `figma-*.png` screenshot exists in the same directory. If not: run `/figma-screenshot` first.
-3. Authored test content is reachable at `preview_url_template` (from config). If `mcp.content_store` is configured, the skill auto-creates the file when it is missing; if the content-store MCP itself is unavailable it stops rather than asking you to create the file by hand. If no `mcp.content_store` is configured, author and serve the content yourself before running.
-4. Dev server is running (or can be started).
-5. `mcp.browser` MCP is connected.
+2. `design.matrix.json` exists in the same directory and parses. If not: re-run `/figma-specify`. The skill will not fall back to reading the markdown table.
+3. `node` is on PATH — it runs the verdict core. If not, the skill stops rather than adjudicating the checks by hand.
+4. At least one `figma-*.png` screenshot exists in the same directory. If not: run `/figma-screenshot` first.
+5. Authored test content is reachable at `preview_url_template` (from config). If `mcp.content_store` is configured, the skill auto-creates the file when it is missing; if the content-store MCP itself is unavailable it stops rather than asking you to create the file by hand. If no `mcp.content_store` is configured, author and serve the content yourself before running.
+6. Dev server is running (or can be started).
+7. `mcp.browser` MCP is connected.
 
 **Outputs:**
 - `{spec_dir}/validation/browser-<viewport>.png` — one screenshot per breakpoint
 - `{spec_dir}/validation/snapshot-<viewport>.json` — DOM + a11y tree
-- `{spec_dir}/validation/report.md` — PASS/FAIL verdict, Layout Matrix verification, token resolution, console/network summary, lint/test results, remediation checklist
+- `{spec_dir}/validation/evidence.json` — every comparison, token resolution, console and network count, visual-delta severity and gate status, written **before** the verdict exists
+- `{spec_dir}/validation/report.md` — the verdict, what blocked it, what was recorded without blocking, and a remediation checklist
+
+The evidence file is what makes a run reproducible: re-running the verdict over the same evidence cannot produce a different answer, because no gathering happens during adjudication. It is also what you read when a run fails, instead of re-deriving why a model said what it said.
 
 **PASS** requires:
-- All viewport screenshots match their Figma reference (no blocker-level deltas)
-- Every Layout Matrix row matches computed style at the relevant breakpoint
-- Every Design Token Mapping entry resolves to the expected value
+- No blocker visual delta at any viewport
+- Every Layout Matrix row matching computed style **at a breakpoint that sets the property** — a row marked `inherited` declares no override, so a difference there is recorded as information, not a failure
+- Every Design Token Mapping entry resolving to the expected value
 - No console errors or failed network requests for block assets
-- `lint_cmd` exits 0 (skipped if not configured)
-- `test_cmd` exits 0 (skipped if not configured)
+- `lint_cmd` and `test_cmd` exiting 0, **or skipped** when the config value is empty. An empty command reports `skipped`, never `pass`
 
-Any blocker delta, Layout Matrix mismatch, lint failure, or test failure → **FAIL**. Fix and re-run.
+**Minor deltas** — spacing within 2px — are recorded and do not fail on their own. They fail when **the same container and the same property** drift at **two or more viewports**, because that is a systematic offset rather than a rounding artefact. Drift on different properties, or different containers, does not aggregate.
+
+**The three exit codes matter.** `0` PASS, `1` FAIL, and `2` **could not evaluate** — no viewports captured, malformed evidence, or an unrecognised gate status. A gate that cannot evaluate its input must not report a result, so it emits no verdict at all. Treat `2` as a fail-stop rather than a failure: a caller that cannot tell "failed the check" from "never ran the check" will eventually treat a broken gate as a clean one.
+
+An **unverifiable reading also fails rather than passes**: if a computed value is missing or cannot be resolved to a length, that property is a blocker. The gate did not verify it, and *did not verify* must never resolve to a match.
+
+The thresholds live in `lib/compare.mjs` and `lib/verdict.mjs`, both pinned by tests — see [TESTING.md](TESTING.md) for why they are pinned as literals rather than derived.
 
 **Fail-stop conditions:**
 - `figma-to-code.config.md` missing → STOP.

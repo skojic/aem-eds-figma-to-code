@@ -104,6 +104,65 @@ Add a `## Layout Matrix (flex / grid)` section immediately **after** the Code Sc
 
 Include **every** flex/grid wrapper that changes or could be misread across breakpoints (inner rows, item groups, reversed variants).
 
+### Layout Matrix sidecar — `design.matrix.json` (mandatory, written with `design.md`)
+
+Write a machine-readable copy of the same table to `design.matrix.json`, in the
+**spec dir** (the directory `spec_output_path` resolves to, alongside
+`design.md`). `/figma-validate` reads this file, never the markdown table.
+
+**Why both.** The table is for a human reviewer; the sidecar is for the gate.
+If the gate parsed the markdown it would be parsing a file this skill wrote
+itself, which breaks the moment an author reorders a column or rewords a cell
+— and it breaks silently, as a row that stops being checked. Emitting the
+structured form directly removes that failure mode instead of testing around
+it.
+
+```json
+{
+  "block": "<block-name>",
+  "breakpoints": [{ "name": "mobile", "min": 320 }, { "name": "tablet", "min": 768 }],
+  "rows": [
+    {
+      "container": ".blockname-inner",
+      "breakpoint": "320",
+      "declarations": "flex-direction: column; gap: 24px",
+      "inherited": false
+    },
+    {
+      "container": ".blockname-inner",
+      "breakpoint": "1024",
+      "declarations": "",
+      "inherited": true
+    }
+  ]
+}
+```
+
+**Rules for the sidecar:**
+
+- One row object per container **per breakpoint** — the table's cells flattened.
+- `breakpoint` is the min-width as a string, matching a `min` value in
+  `breakpoints` from config.
+- `declarations` holds only the properties that breakpoint **actually sets**,
+  as a `prop: value; prop: value` string. Supported properties:
+  `flex-direction`, `display`, `justify-content`, `align-items`, `flex-wrap`,
+  `gap`, `row-gap`, `column-gap`, `padding`, `margin`, `font-size`. **A
+  property outside that list makes the gate fail-stop rather than skip the
+  row** — if a design needs one, it is a change to the gate, not something to
+  slip into the sidecar.
+- **`inherited: true` means this breakpoint declares no override** — the cell
+  said *"unchanged from …"*. Leave `declarations` empty and let the gate treat
+  a difference as information rather than a defect. Do **not** copy the
+  inherited values down into the row: that would assert an override the CSS
+  does not make, and the gate would then fail a correct implementation.
+- Lengths may be `px`, `rem`, or unitless `0`. **Not `em`** — the gate refuses
+  it, because a computed reading has already resolved `em` against the
+  element's own font size and treating it as `rem` would be wrong whenever
+  those differ.
+- If the table and the sidecar disagree, that is a defect in this skill's
+  output, not a tolerable difference. They are generated together from the same
+  Step 2b extraction.
+
 ### Structure design.md with these sections
 
 ```markdown

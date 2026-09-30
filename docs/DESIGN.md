@@ -68,18 +68,51 @@ Everything project-specific is lifted out of the SKILL.md files into one config 
 aem-eds-figma-to-code/
 ├── README.md                                   # what it is (EDS-first), install, the loop, reuse steps
 ├── LICENSE                                      # MIT (public showcase)
+├── package.json                                 # dev-only: npm test, npm run typecheck
+├── tsconfig.json                                # checkJs over the JSDoc annotations; noEmit
+├── .github/workflows/ci.yml                     # runs both on push and pull request
 ├── docs/
 │   ├── DESIGN.md                                # this document
+│   ├── TESTING.md                               # what is tested, what is not, and why
 │   └── workflow.md                              # specify → screenshot → build → validate loop + prerequisites
 ├── config/
 │   ├── figma-to-code.config.template.md         # every field, blank, with inline guidance
 │   └── examples/
 │       └── eds-example.config.md                # one generic EDS-style filled example (no originating-project identifiers)
-└── skills/
-    ├── figma-specify/SKILL.md
-    ├── figma-screenshot/SKILL.md
-    └── figma-validate/SKILL.md
+├── skills/
+│   ├── figma-specify/SKILL.md
+│   ├── figma-screenshot/SKILL.md
+│   └── figma-validate/
+│       ├── SKILL.md
+│       └── lib/                                 # ships WITH the skill — copied in as one directory
+│           ├── compare.mjs                      # normalise + compare one CSS property
+│           ├── verdict.mjs                      # the PASS/FAIL rules, executed not interpreted
+│           └── cli.mjs                          # exit 0 PASS · 1 FAIL · 2 could not evaluate
+└── test/                                        # repo infrastructure — NOT copied into a project
+    ├── compare.test.mjs
+    ├── verdict.test.mjs
+    ├── skill-contracts.test.mjs                 # guards disable-model-invocation across all skills
+    ├── presentation-data.test.mjs               # referential integrity of agentic-workflow/data.js
+    └── docs-board-flow.test.mjs                 # docs/workflow.md lane prose vs the DIAGRAM order
 ```
+
+**The `lib/` versus `test/` split is the important line.** `lib/` lives inside the skill directory so the install stays "copy one folder"; `test/` is repo infrastructure and is never copied anywhere. Vitest runs at the repo level over the pack's own logic — it is not a gate inside the pipeline, and `test_cmd` in a consuming project remains a separate, optional thing.
+
+**Artifacts written into a consuming project**, all under the directory `spec_output_path` resolves to:
+
+```
+drafts/specs/{ticket}/
+├── design.md                       # /figma-specify — the spec, for a human
+├── design.matrix.json              # /figma-specify — the Layout Matrix, for the gate
+├── figma-{slug}-{viewport}.png     # /figma-screenshot — visual reference
+└── validation/                     # /figma-validate
+    ├── browser-{viewport}.png
+    ├── snapshot-{viewport}.json
+    ├── evidence.json               # everything gathered, BEFORE any verdict exists
+    └── report.md                   # the verdict and remediation checklist
+```
+
+The ordering inside `validation/` is the design: gather, write it all down, then adjudicate. `evidence.json` is what makes a run reproducible and what you read when one fails.
 
 **Reuse later:** copy `skills/*` into a project's `.claude/skills/`, drop a filled `figma-to-code.config.md` at the project root. Tool-agnostic, no plugin machinery.
 
@@ -127,3 +160,31 @@ context on every turn.
 Stack: `index.html`, `styles.css`, `data.js` (all content), `app.js` (renderers). No build step and
 no dependencies beyond a webfont; asset paths are relative so the subdirectory deploy needs no
 configuration, and a `.nojekyll` marker at the repo root keeps Pages from processing the tree.
+
+---
+
+## Addendum — 2026-09-30: the verdict core, and dev dependencies
+
+§8's success criteria were satisfiable by inspection, with nothing enforcing them. The repo now
+has a test suite, and one design decision changed to make the interesting part testable.
+
+**The PASS/FAIL rules moved out of prose into `skills/figma-validate/lib/`.** They were stated in
+`figma-validate/SKILL.md` and re-derived by a model on every run: evidence gathering was
+deterministic, the decision was not. `compare.mjs` normalises and compares one property,
+`verdict.mjs` aggregates, `cli.mjs` is the process boundary. The rules now exist in exactly one
+place and SKILL.md defers to it.
+
+**`figma-specify` also emits `design.matrix.json`.** The human-readable Layout Matrix table stays;
+the gate reads the sidecar. Parsing markdown this pack generates itself would break silently the
+first time an author reordered a column — as a row that stops being checked while the report still
+says PASS.
+
+**Dev dependencies do not contradict "no build step".** `package.json` adds `vitest` and
+`typescript`, both dev-only. Nothing is compiled and nothing is emitted: types come from JSDoc
+annotations checked by `tsc --noEmit`, and the shipped files stay plain ESM that Node runs
+directly. The install model in §5 is unchanged — copy `skills/*` and one config file. The
+presentation remains dependency-free **at runtime**, which is the property that mattered.
+
+**New non-goal:** end-to-end tests of the loop. "Figma frame → correct CSS" needs Figma and a
+browser; the core is testable because it takes gathered evidence as input. Reasoning in
+`docs/TESTING.md`.

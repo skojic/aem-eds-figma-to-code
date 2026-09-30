@@ -38,10 +38,10 @@ resolved directory.
 - Render the authored content file in a real browser via the `mcp.browser` server
 - Capture screenshots at the viewports from `breakpoints` (config) that have a Figma frame
 - Compare against `<spec-dir>/figma-*.png` and the rules in `design.md`
-- Spot-check computed CSS (`flex-direction`, `gap`, resolved token colors, font sizes) against the Layout Matrix
+- Spot-check computed CSS (`flex-direction`, `gap`, resolved token colors, font sizes) against the Layout Matrix, **reading expected values from `<spec-dir>/design.matrix.json`** — the structured sidecar `/figma-specify` writes, not the markdown table
 - Surface console errors and network failures
 - Run `lint_cmd` (config; skip if empty) and `test_cmd` (config; skip if empty)
-- Emit a PASS/FAIL verdict with remediation steps
+- **Write `<spec-dir>/validation/evidence.json` and let `lib/cli.mjs` decide the verdict** — see Step 6b. This skill gathers evidence; it does not adjudicate numeric checks
 
 **NOT in scope** (covered elsewhere):
 - Producing or editing `design.md` (that is `/figma-specify`)
@@ -52,6 +52,8 @@ resolved directory.
 
 1. **Ticket ID resolvable** — `{ticket}` from invocation argument.
 2. **`<spec-dir>/design.md` exists** — produced by `/figma-specify`. If missing, **STOP** and instruct: "Run `/figma-specify {ticket}` first."
+2b. **`<spec-dir>/design.matrix.json` exists and parses** — the structured Layout Matrix, also produced by `/figma-specify`. If it is missing or malformed, **STOP** and instruct: "Re-run `/figma-specify {ticket}` to regenerate the sidecar." **Do not fall back to parsing the markdown table**: reconstructing expectations from prose is how a row quietly stops being checked while the report still says PASS.
+2c. **Node is available** — `lib/cli.mjs` runs the verdict core. If `node` is not on PATH, **STOP**; do not adjudicate the checks by hand instead.
 3. **Figma screenshots exist** under `<spec-dir>/figma-*.png`. If none, **STOP** and instruct: "Run `/figma-screenshot {ticket} <figma-url>` for each frame referenced in design.md, then re-run."
 4. **Authored test content** reachable at `preview_url_template` (from config).
    - If `mcp.content_store` is set: probe via that MCP using `content_path_template` (from config); if the entry is missing, **auto-create** it — see Step 1b for content rules.
@@ -210,6 +212,62 @@ For each theme in the themes from `themes` (config); skip theme checks if `theme
 
 Capture exit codes and any failures. Skip the corresponding step if the config value is empty.
 
+## Step 6b: Write the evidence file and let code decide the verdict
+
+**The verdict is not a judgement call and is not made by reading the rules
+below.** Write everything gathered so far to
+`<spec-dir>/validation/evidence.json`, then run the verdict tool:
+
+```bash
+node <skill-dir>/lib/cli.mjs <spec-dir>/validation/evidence.json
+```
+
+It prints the report body and exits **0 for PASS, 1 for FAIL, and 2 when the
+evidence could not be evaluated at all**. Treat 2 as a fail-stop, not a
+failure: it means the gate did not run, which is a different problem from the
+implementation being wrong, and conflating the two is how a broken gate starts
+looking like a clean one.
+
+**Evidence shape.** Expected values come from `design.matrix.json` (written by
+`/figma-specify`); read that file, never the markdown Layout Matrix table.
+
+```json
+{
+  "block": "teaser",
+  "viewports": [
+    {
+      "name": "desktop",
+      "rows": [
+        {
+          "container": ".teaser-inner",
+          "inherited": false,
+          "results": [
+            { "prop": "gap", "match": false, "severity": "minor", "reason": "expected 32px, computed 32.5px" }
+          ]
+        }
+      ],
+      "tokens": [
+        { "element": ".teaser-title", "property": "color", "expected": "var(--heading-color)", "resolved": "rgb(16, 17, 20)", "match": true }
+      ],
+      "consoleErrors": 0,
+      "networkFailures": 0
+    }
+  ],
+  "visualDeltas": [{ "viewport": "desktop", "severity": "minor", "note": "1px CTA offset" }],
+  "gates": { "lint": "pass", "test": "skipped" }
+}
+```
+
+Produce each `results` entry with `lib/compare.mjs` rather than by eye —
+`compareRow(row, computedStyles)` handles unit normalisation (`2rem` against
+`32px`, `gap: normal` against `0px`, a `flex-flow` shorthand reading such as
+`row nowrap` against `row`) and assigns severity. Comparing the strings
+directly produces false failures on every one of those cases.
+
+**Your remaining judgement is the visual diff** (Step 4) and the severity you
+assign to each visual delta. That genuinely is a judgement and it is labelled
+as one. Everything numeric is decided by code.
+
 ## Step 7: Report
 
 Write `<spec-dir>/validation/report.md`:
@@ -269,17 +327,38 @@ Then output a concise summary to the conversation:
 
 ## PASS / FAIL Criteria
 
+**These rules live in `lib/verdict.mjs` and are executed, not interpreted.**
+They are described here so a reader knows what the tool does; the tool is the
+authority. If this section and the code ever disagree, the code is right and
+this section is a bug.
+
 **PASS** requires all of:
-- Every viewport's browser screenshot visually matches its Figma reference (no blocker deltas)
-- Every Layout Matrix row matches computed style at the right breakpoint
-- Every token in the Design Token Mapping resolves to the expected value in the current theme
-- No console errors, no failed network requests for block assets
-- `lint_cmd` exits 0 (skipped if config is empty)
-- `test_cmd` exits 0 (skipped if config is empty)
+- No blocker visual delta at any viewport
+- Every Layout Matrix row matching computed style **at a breakpoint that sets
+  the property** — a row marked `inherited` declares no override, so a
+  difference there is recorded as information, not a failure
+- Every token in the Design Token Mapping resolving to its expected value
+- No console errors and no failed network requests
+- `lint_cmd` and `test_cmd` exiting 0, or skipped when the config value is empty
 
-Any blocker delta, any Layout Matrix mismatch at the breakpoint where the property is set, any lint or test failure → **FAIL**.
+**Minor deltas** — spacing within **2px** — are recorded and do not fail on
+their own. They fail when **the same container and the same property** drift at
+**two or more viewports**, because that is a systematic offset rather than a
+rounding artefact. Drift on different properties, or on different containers,
+does not aggregate.
 
-Minor deltas (e.g. 1–2px spacing rounding) are recorded but do not fail the run unless they recur across viewports.
+**Unusable evidence is not a verdict.** No viewports captured, a malformed
+evidence file, or an unrecognised gate status makes the tool exit **2** without
+emitting PASS or FAIL. A gate that cannot evaluate its input must not report a
+result — the dangerous failure here is a PASS nobody earned.
+
+**An unverifiable reading fails rather than passes.** If a computed value is
+missing or cannot be resolved to a length, that property is a blocker: the gate
+did not verify it, and "did not verify" must never resolve to a match.
+
+The thresholds are `MINOR_PX_TOLERANCE` and `RECURRENCE_THRESHOLD` in
+`lib/compare.mjs` and `lib/verdict.mjs`, both pinned by tests. See
+`docs/TESTING.md` for why they are pinned as literals rather than derived.
 
 ## Key Rules
 

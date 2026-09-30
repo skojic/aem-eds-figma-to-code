@@ -2,6 +2,10 @@
 docs/superpowers/
 .superpowers/
 
+# Dev dependencies for the test suite. The skill pack ships no runtime
+# dependencies and the presentation stays dependency-free — see docs/DESIGN.md.
+node_modules/
+
 # OS / editor cruft
 .DS_Store
 *.swp

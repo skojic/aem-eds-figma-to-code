@@ -1,0 +1,34 @@
+name: CI
+
+# The point of this workflow is that the gate the README describes is a gate
+# that actually runs. A repo whose subject is PASS/FAIL validation should not
+# rely on someone remembering to run its own checks locally.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Types come from JSDoc annotations checked by tsc, not from TypeScript
+      # sources. There is no build step and no emitted output by design — the
+      # pack installs by copying directories.
+      - run: npm run typecheck
+
+      - run: npm test
