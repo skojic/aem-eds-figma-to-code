@@ -255,6 +255,8 @@ An **unverifiable reading also fails rather than passes**: if a computed value i
 
 The thresholds live in `lib/compare.mjs` and `lib/verdict.mjs`, both pinned by tests — see [TESTING.md](TESTING.md) for why they are pinned as literals rather than derived.
 
+**A passing suite does not mean the thresholds are right.** Tests prove the rules are implemented as written; only field data shows whether they are correct — how often the gate passes work review later rejects, and how often it blocks work that was fine. [TESTING.md](TESTING.md) sets out how to measure both and why they need different denominators. No figures are published, because a reference implementation has no production runs to count.
+
 **Fail-stop conditions:**
 - `figma-to-code.config.md` missing → STOP.
 - `mcp.browser` not connected → STOP; no substitution with WebFetch or scraping.

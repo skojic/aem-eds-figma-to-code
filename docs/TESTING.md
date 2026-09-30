@@ -119,6 +119,48 @@ One practical note: if you script this, restore the file explicitly. An `EXIT`
 trap does not fire in a persistent shell session, and a mutation can survive
 the run that was supposed to clean it up.
 
+## Measuring the gate itself
+
+Everything above answers *are the rules implemented correctly?* It does not
+answer *are the rules right?* A suite can be green while the gate passes work it
+should have stopped. Only field data settles that, and this section is the
+method rather than the results.
+
+**No numbers are published here, because this repo has no production runs.** A
+reference implementation has no users to measure. Stating the method without
+data is honest; printing a dashboard with nothing in it would be the same defect
+as the test badge this repo used to carry for a suite that did not exist.
+
+The two numbers worth collecting are error rates in **opposite directions**, and
+they are not symmetric:
+
+- **False pass** — the gate said PASS and review later found a defect it should
+  have caught. This is the control failing silently, which is the expensive
+  direction: nobody is alerted, and the defect ships.
+- **False fail** — the gate said FAIL and the code was fine. This is what drives
+  abandonment. A gate that cries wolf gets switched off, and a switched-off gate
+  has no accuracy worth discussing.
+
+Most instrumentation reports neither. Run counts, pass counts and token spend are
+**activity** metrics: they establish that a tool is being used, not that it is
+doing its job. Either error rate above says more than all of them together.
+
+Three details decide whether the numbers mean anything:
+
+1. **False passes are measured against passes, not against all runs.** A false
+   pass is a pass that was wrong, so the denominator is the passes. Dividing by
+   total runs understates it — on one sample, by a factor of three — and
+   understating the number that measures the control is the error that matters.
+2. **False fails are measured against fails**, by the same logic.
+3. **False passes are structurally undercounted.** You only learn of one if
+   review happens to notice. The figure is therefore a floor, not an estimate,
+   and should be quoted that way.
+
+A log for this is append-only, one row per run, with corrections as new rows
+referencing an earlier run rather than edits to it — a log that can be rewritten
+is a log whose totals cannot be quoted. Schema and queries are the remaining
+work; see the run log under future work in [DESIGN.md](DESIGN.md).
+
 ## What is deliberately not tested
 
 **The pipeline end to end.** "Figma frame → correct CSS" cannot be unit-tested

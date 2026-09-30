@@ -188,3 +188,20 @@ presentation remains dependency-free **at runtime**, which is the property that 
 **New non-goal:** end-to-end tests of the loop. "Figma frame → correct CSS" needs Figma and a
 browser; the core is testable because it takes gathered evidence as input. Reasoning in
 `docs/TESTING.md`.
+
+### Future work — the run log
+
+`figma-validate` writes a per-ticket `report.md` and nothing cumulative, so nothing in the pack
+shows whether the gate is *accurate* rather than merely implemented. The remaining piece is an
+append-only log, one row per run, with corrections recorded as new rows referencing an earlier run
+rather than edits to it — plus a summary over it: run count, pass rate, most frequent failing
+checks, and the two error rates that actually measure the control.
+
+`docs/TESTING.md` §"Measuring the gate itself" holds the measurement design, including why false
+passes and false fails need different denominators and why the false-pass figure is a floor rather
+than an estimate. **Deliberately no dependencies when it lands** — a flat file, not a database.
+The pack's install model is copy three directories and one config file, and a database dependency
+would mean the reference implementation could not be stood up without one.
+
+**It ships without numbers.** A reference implementation has no production runs to count, and
+publishing an empty dashboard would repeat the defect this addendum exists to correct.

@@ -40,7 +40,9 @@ not report a result.** No viewports captured or a malformed evidence file exits
 
 The one judgement left is the visual diff against the Figma reference, and it is
 labelled as a judgement. See [docs/TESTING.md](docs/TESTING.md) for what is
-tested, what is deliberately not, and why.
+tested, what is deliberately not, and why — including how you would measure
+whether the gate is *accurate* rather than merely implemented, which is a
+different question and the more interesting one.
 
 ```bash
 npm test            # verdict core · skill contracts · presentation data · docs vs diagram
