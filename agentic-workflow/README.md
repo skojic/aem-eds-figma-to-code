@@ -39,7 +39,7 @@ the two is exactly what an earlier version of this page did.
 **Control deck (left rail)** — pill chips toggle *Files* (the stage track and explorer card),
 *Diagram* (the phase board) and *Prompt* (the invocation node). Files and Diagram are mutually
 protective: switching one off forces the other on, so the stage is never empty. Below them each
-workflow layer (Config, Gates, MCP, Subagents, Model) has a three-way segmented control:
+workflow layer (Config, Gates, Hooks, MCP, Subagents, Model) has a three-way segmented control:
 `off` hides it, `base` draws the headline path, `extended` additionally reveals the fine-grained
 detail — individual MCP calls, the full fail-stop checklist, per-node chips. Hovering or focusing
 any control explains that exact combination in the line below the deck.
@@ -67,7 +67,8 @@ show relative cost, not to be quoted as measurements.
 Files appear as they would on disk: the three `SKILL.md` files, `figma-to-code.config.md`, then the
 generated `design.md` and its `design.matrix.json` sidecar, Figma PNGs, your block source, and the
 validation artifacts — screenshots, DOM snapshots, `evidence.json` and `report.md`; newly added
-files animate in. Click a file — or focus it and press Enter/Space — to see what it contributes;
+files animate in. The four hook scripts arrive with the validate skill at stage 3 and
+`.claude/settings.json`, which wires them, at stage 4. Click a file — or focus it and press Enter/Space — to see what it contributes;
 the board node it drives lights up, and files with no board counterpart say so. `←` / `→` step
 through stages.
 
@@ -83,6 +84,13 @@ comparison → visual diff → `node lib/cli.mjs` → verdict), with the FAIL lo
 request-payload node in lane 01 reacts live to the stage, the layer settings and the conversation
 slider.
 
+**Hooks layer** — Claude Code hooks that enforce the gate rather than ask for it. In lane 03 the
+*preflight* hook sits ahead of the pre-flight checks, the *evidence check* hook follows `evidence.json`,
+and the *report guard* and *stop gate* hooks follow the verdict tool; lane 01 gets a *matrix check* after
+`design.md` and `design.matrix.json` are written. Preflight, report guard and stop gate show at `base`; the
+two artifact-check nodes show at `extended`. Hooks carry a `hook` tag and share the fail-stop hue, since they
+are fail-stops the harness runs. They add nothing to the context gauge: a hook speaks only when it blocks.
+
 Lane 03 is where the verdict changed hands. The **computed-style comparison** node sits under
 *Subagents* at `extended` and the **`node lib/cli.mjs`** gate under *Gates* at `base` — so to see
 both, set Subagents to `extended`. Phase 03 now has no model-decision node at all, which is the
@@ -91,7 +99,7 @@ one.
 
 ## Colour, accessibility and performance
 Colour is deliberately restrained. Only three hues carry meaning on the board — pink for
-fail-stop gates, cyan for MCP tool calls, amber for model decisions — and everything else is
+fail-stop gates and hooks, cyan for MCP tool calls, amber for model decisions — and everything else is
 neutral. Node type is always stated in text as well, so hue is reinforcement, never the sole
 signal. The phase lanes share one neutral accent so they cannot be confused with node types, and
 the controls are entirely monochrome: selection is shown with fill and weight, not hue, so the

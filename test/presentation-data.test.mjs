@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createContext, runInNewContext } from 'node:vm';
 import { describe, it, expect } from 'vitest';
 
@@ -217,6 +217,11 @@ describe('the file tree covers what the skills actually write', () => {
     'figma-',
     'browser-',
     'snapshot-',
+    'preflight.mjs',
+    'artifact-check.mjs',
+    'report-guard.mjs',
+    'verdict-stop.mjs',
+    'settings.json',
   ];
 
   const skillSources = ['figma-specify', 'figma-screenshot', 'figma-validate']
@@ -233,6 +238,29 @@ describe('the file tree covers what the skills actually write', () => {
   it.each(ARTIFACTS)('%s appears in the presentation file tree', (artifact) => {
     const paths = FILES.map((f) => f.path);
     expect(paths.some((p) => p.includes(artifact))).toBe(true);
+  });
+
+  it('shows every hook script the pack ships, and nothing it does not', () => {
+    // The hooks directory is the source of truth. A script added there and not
+    // to FILES leaves the page describing a pack with fewer guards than it has;
+    // a tree entry with no script behind it describes a guard that does not exist.
+    const shipped = readdirSync(new URL('../skills/figma-validate/hooks/', import.meta.url))
+      .filter((f) => f.endsWith('.mjs') && f !== 'stdin.mjs')
+      .sort();
+    const shown = FILES
+      .map((f) => f.path)
+      .filter((path) => path.startsWith('.claude/skills/figma-validate/hooks/'))
+      .map((path) => path.split('/').pop())
+      .sort();
+    expect(shown).toEqual(shipped);
+  });
+
+  it('binds every hook file to a node in the hooks layer', () => {
+    const hookNodes = DIAGRAM.filter((n) => n.layer === 'hooks').map((n) => n.id);
+    expect(hookNodes.length).toBeGreaterThanOrEqual(4);
+    FILES.filter((f) => f.path.includes('/hooks/')).forEach((f) => {
+      expect(hookNodes, f.path).toContain(f.node);
+    });
   });
 
   it('explains every artifact it shows, like package.json does', () => {

@@ -5,7 +5,7 @@ This document describes the end-to-end loop these three skills support and expla
 > **Prefer to see it?** The same loop is available as an interactive diagram:
 > **[Agentic Workflow presentation](https://skojic.github.io/aem-eds-figma-to-code/agentic-workflow/)**.
 > It steps through the files each skill adds to your project, lets you switch the fail-stop gates,
-> MCP calls and subagents on and off, and estimates what the loop costs in context.
+> hooks, MCP calls and subagents on and off, and estimates what the loop costs in context.
 > Source in [`agentic-workflow/`](../agentic-workflow/).
 
 ---
@@ -41,12 +41,13 @@ The [presentation](https://skojic.github.io/aem-eds-figma-to-code/agentic-workfl
 same three phases as side-by-side lanes. In reading order:
 
 **01 Specify** — invocation → model request payload → pre-flight fail-stops → `mcp.figma` → layout
-extraction → **`design.md` + `design.matrix.json` written** → token-gap pass.
+extraction → **`design.md` + `design.matrix.json` written** → matrix check hook → token-gap pass.
 
 **02 Capture & build** — `/figma-screenshot` → `figma-*.png` saved → **your implementation step**.
 
-**03 Validate** — pre-flight fail-stops → content store → browser breakpoint loop → visual diff →
-computed-style comparison → **`evidence.json` written** → `node lib/cli.mjs` → PASS / FAIL, with the
+**03 Validate** — preflight hook → pre-flight fail-stops → content store → browser breakpoint loop → visual diff →
+computed-style comparison → **`evidence.json` written** → evidence check hook → `node lib/cli.mjs` →
+report guard hook → stop gate hook → PASS / FAIL, with the
 FAIL branch looping back into phase 02.
 
 The two emphasised nodes are the ones worth reading the order around. Lane 01 produces both the
@@ -54,6 +55,10 @@ spec and its sidecar in one step. Lane 03 separates **gathering** from **decidin
 observed is written down first, and only then does a tested module read that file and reach a
 verdict. Lane 03 contains no model-decision node at all — the only judgement left in it is the
 visual diff, which is labelled as one.
+
+**Hook nodes** sit in their own *Hooks* layer. The preflight, report guard and stop gate hooks show at
+`base`; the two artifact-check nodes (the matrix check in lane 01, the evidence check in lane 03) show
+at `extended`. Hooks never decide a verdict — they make sure the gate ran and that nothing contradicts it.
 
 **Two nodes are hidden by default.** The computed-style comparison sits under *Subagents* at
 `extended`, and the `node lib/cli.mjs` gate under *Gates* at `base`. If lane 03 looks like it goes
@@ -262,6 +267,24 @@ The thresholds live in `lib/compare.mjs` and `lib/verdict.mjs`, both pinned by t
 - `mcp.browser` not connected → STOP; no substitution with WebFetch or scraping.
 - Content-store MCP unavailable (when `mcp.content_store` is set) → STOP; do not fall back to "create the file by hand".
 - Dev server not reachable after 30 s → STOP.
+
+---
+
+## Hooks (optional enforcement)
+
+The skills *ask* the model to follow the loop; hooks make Claude Code enforce the
+parts that can be checked mechanically. Four ship in
+`skills/figma-validate/hooks/`, wired by `settings.snippet.json`:
+
+| Moment | Hook | Effect |
+|---|---|---|
+| `/figma-validate` is typed | `preflight.mjs` | Blocks the run if config, `design.md`, a valid `design.matrix.json` or a `figma-*.png` is missing, naming the skill to run. |
+| `design.matrix.json` / `evidence.json` written | `artifact-check.mjs` | Returns schema problems to the model immediately. |
+| `report.md` about to be written | `report-guard.mjs` | Denies a verdict that differs from the gate's, or any report over unevaluable evidence. |
+| The session tries to end | `verdict-stop.mjs` | Blocks until `report.md` exists, is newer than the evidence, and states the recomputed verdict. |
+
+They do not decide the verdict and do not replace the skills' own fail-stops;
+see the README's "Why hooks" for the reasoning and limits.
 
 ---
 

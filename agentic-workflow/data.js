@@ -11,13 +11,14 @@
 const LAYERS = [
   { id: 'config',    label: 'Config',    kind: 'context',  hint: 'figma-to-code.config.md + token files loaded into context' },
   { id: 'gates',     label: 'Gates',     kind: 'gate',     hint: 'Pre-flight fail-stop checks — missing data blocks the run' },
+  { id: 'hooks',     label: 'Hooks',     kind: 'gate',     hint: 'Claude Code hooks that enforce the gate — pre-flight, schema checks, report guard, stop gate' },
   { id: 'mcp',       label: 'MCP',       kind: 'tool',     hint: 'figma / browser / ticket-tracker / content-store MCP calls' },
   { id: 'subagents', label: 'Subagents', kind: 'subagent', hint: 'Delegated visual-diff and token-resolution passes' },
   { id: 'model',     label: 'Model',     kind: 'model',    hint: 'Model decision points: layout extraction, diff, verdict' },
 ];
 
-const BASE_LAYERS = ['config', 'gates', 'mcp'];
-const EXTENDED_LAYERS = ['config', 'gates', 'mcp', 'subagents', 'model'];
+const BASE_LAYERS = ['config', 'gates', 'hooks', 'mcp'];
+const EXTENDED_LAYERS = ['config', 'gates', 'hooks', 'mcp', 'subagents', 'model'];
 const DEFAULT_LAYERS = [
   { id: 'prompt', label: 'Prompt' },
   { id: 'model',  label: 'Model'  },
@@ -26,7 +27,7 @@ const DEFAULT_LAYERS = [
 /* Only the three hues that carry meaning are listed. Everything else is
    neutral and labelled in text on the node itself. */
 const KIND_LEGEND = [
-  { kind: 'gate',  label: 'Fail-stop gate' },
+  { kind: 'gate',  label: 'Fail-stop gate / hook' },
   { kind: 'tool',  label: 'MCP tool call' },
   { kind: 'model', label: 'Model / decision' },
   { kind: 'step',  label: 'Steps, artifacts, subagents, your step' },
@@ -37,8 +38,8 @@ const STAGES = [
   { n: 0, label: 'plain', caption: 'Plain EDS project — no skill pack yet. Claude has your source, nothing else.' },
   { n: 1, label: 'specify', caption: 'Skill 1 copied in: /figma-specify can now read Figma and write a spec.' },
   { n: 2, label: 'screenshot', caption: 'Skill 2 copied in: /figma-screenshot saves audit-trail PNGs next to the spec.' },
-  { n: 3, label: 'validate', caption: 'Skill 3 copied in: /figma-validate drives a browser and emits PASS/FAIL.' },
-  { n: 4, label: 'config', caption: 'Config filled in. Every skill fail-stops without it — this is the only project-specific file.' },
+  { n: 3, label: 'validate', caption: 'Skill 3 copied in: /figma-validate drives a browser and emits PASS/FAIL. Its four hook scripts come with it.' },
+  { n: 4, label: 'config', caption: 'Config filled in and the hooks wired into .claude/settings.json. Every skill fail-stops without the config — it is the only project-specific skill file.' },
   { n: 5, label: 'spec', caption: '/figma-specify has run: design.md is the source of truth for HTML/CSS.' },
   { n: 6, label: 'build', caption: '/figma-screenshot has run and you implemented the block from design.md.' },
   { n: 7, label: 'report', caption: '/figma-validate has run: screenshots, snapshots and a PASS/FAIL report.' },
@@ -107,11 +108,47 @@ const FILES = [
     node: 'step-validate',
   },
   {
+    path: '.claude/skills/figma-validate/hooks/preflight.mjs', stage: 3, status: 'pack',
+    title: 'Hook — preflight',
+    desc: 'Runs on UserPromptExpansion for /figma-validate. Blocks the run before it starts if the config, design.md, a parseable and well-shaped design.matrix.json or a figma-*.png is missing, and names the skill that produces each one. Exit 2 blocks the expansion.',
+    code: '/figma-validate PROJ-123 cannot start:\n  - …/design.matrix.json does not exist —\n    re-run /figma-specify PROJ-123\n  - no figma-*.png in …/PROJ-123 —\n    run /figma-screenshot PROJ-123 <url>',
+    node: 'hook-preflight',
+  },
+  {
+    path: '.claude/skills/figma-validate/hooks/artifact-check.mjs', stage: 3, status: 'pack',
+    title: 'Hook — artifact check',
+    desc: 'Runs on PostToolUse after every Write or Edit. Validates design.matrix.json and validation/evidence.json the moment they are written and hands the exact problems back to the model, so a malformed file is fixed now rather than at the end of a browser loop. Also flags a container the sidecar checks that design.md never mentions.',
+    code: '- evidence.json: viewports[0].rows[0].results[0].match\n  must be a boolean\n- design.matrix.json: rows[1] is inherited but has\n  declarations\nFix the file and write it again.',
+    node: 'hook-evidence-check',
+  },
+  {
+    path: '.claude/skills/figma-validate/hooks/report-guard.mjs', stage: 3, status: 'pack',
+    title: 'Hook — report guard',
+    desc: 'Runs on PreToolUse before a Write or Edit. Denies a validation/report.md whose Verdict line differs from what the gate computes from evidence.json, and denies any report at all when the evidence cannot be evaluated — the exit-2 case, where no verdict is the correct output.',
+    code: '{ "permissionDecision": "deny",\n  "permissionDecisionReason":\n    "The report says PASS but running the gate\n     over evidence.json gives FAIL." }',
+    node: 'hook-report-guard',
+  },
+  {
+    path: '.claude/skills/figma-validate/hooks/verdict-stop.mjs', stage: 3, status: 'pack',
+    title: 'Hook — stop gate',
+    desc: 'Runs on Stop. A session that wrote evidence.json cannot finish until report.md exists, is newer than the evidence, and states the verdict recomputed from it. Nothing the model recorded is trusted. A stop_hook_active guard lets a second stop through with a warning instead of trapping the session.',
+    code: '{ "decision": "block",\n  "reason": "The validation run is not finished:\n    - report.md is older than evidence.json —\n      re-run the gate." }',
+    node: 'hook-stop',
+  },
+  {
     path: 'figma-to-code.config.md', stage: 4, status: 'config',
     title: 'The only project-specific file',
     desc: 'Binds MCP roles, breakpoints, themes, token files, output paths and lint/test commands. Missing → every skill fail-stops and points at the template. The SKILL.md files stay unedited.',
     code: 'mcp:\n  figma: "figma"\n  browser: "chrome-devtools"\n  content_store: "da-live"\nspec_output_path: "drafts/specs/{ticket}/design.md"\nbreakpoints:\n  - { name: "mobile",  min: 320 }\n  - { name: "tablet",  min: 768 }\n  - { name: "desktop", min: 1024 }',
     node: 'payload',
+  },
+
+  {
+    path: '.claude/settings.json', stage: 4, status: 'config',
+    title: 'Hook wiring',
+    desc: 'The pack ships hooks/settings.snippet.json; merging it here registers the four hooks at project level. They are project settings, not SKILL.md frontmatter, because frontmatter hooks register only after the skill has run — too late to pre-flight its own invocation — and a frontmatter Stop hook is converted to SubagentStop.',
+    code: '"hooks": {\n  "UserPromptExpansion": [{ "matcher": "figma-validate", … }],\n  "PreToolUse":  [{ "matcher": "Write|Edit", … }],\n  "PostToolUse": [{ "matcher": "Write|Edit", … }],\n  "Stop":        [{ … }]\n}',
+    node: 'hook-preflight',
   },
 
   {
@@ -206,6 +243,13 @@ const DIAGRAM = [
   { id: 'out-spec', phase: 1, kind: 'output', num: 2,
     title: 'design.md + design.matrix.json written', sub: 'Layout Matrix · CSS Skeleton · Token Mapping · Interactive States — and the matrix as JSON for the gate' },
 
+  { id: 'hook-matrix-check', phase: 1, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'extended',
+    title: 'Hook · artifact-check', sub: 'PostToolUse — design.matrix.json is validated the moment it is written, and a container design.md never mentions is flagged as drift',
+    chips: [
+      { text: 'empty matrix → rejected, it verifies nothing', mode: 'extended' },
+      { text: 'inherited row carrying values → rejected', mode: 'extended' },
+    ] },
+
   { id: 'sub-tokens', phase: 1, kind: 'subagent', layer: 'subagents', mode: 'base',
     title: 'Token-gap pass', sub: 'Every var(--…) in the spec cross-referenced against token_files; gaps flagged, never invented',
     chips: [{ text: 'comm -23 tokens-used tokens-defined', mode: 'extended' }] },
@@ -225,6 +269,15 @@ const DIAGRAM = [
 
   { id: 'step-validate', phase: 3, kind: 'step', num: 5,
     title: '/figma-validate PROJ-123', sub: 'Runtime validation only — read-only on code, Figma and the ticket' },
+
+  { id: 'hook-preflight', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'base',
+    title: 'Hook · preflight', sub: 'UserPromptExpansion — blocks /figma-validate before it starts and names the skill that produces what is missing',
+    chips: [
+      { text: 'config + design.md present', mode: 'base' },
+      { text: 'design.matrix.json parses, valid shape', mode: 'base' },
+      { text: 'figma-*.png present', mode: 'base' },
+      { text: 'exit 2 → the run never starts', mode: 'extended' },
+    ] },
 
   { id: 'gate-validate', phase: 3, kind: 'gate', layer: 'gates', mode: 'base',
     title: 'Pre-flight — fail-stop', sub: 'Any missing prerequisite stops the run and names what to fix',
@@ -263,6 +316,14 @@ const DIAGRAM = [
   { id: 'out-evidence', phase: 3, kind: 'output',
     title: 'evidence.json written', sub: 'Every check, count and gate status — recorded before the verdict is decided' },
 
+  { id: 'hook-evidence-check', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'extended',
+    title: 'Hook · artifact-check', sub: 'PostToolUse — evidence.json is shape-checked on write; the problems go straight back to the model',
+    chips: [
+      { text: 'match must be a boolean', mode: 'extended' },
+      { text: 'a mismatch needs a severity', mode: 'extended' },
+      { text: 'empty viewports → rejected', mode: 'extended' },
+    ] },
+
   { id: 'verdict-core', phase: 3, kind: 'gate', layer: 'gates', mode: 'base',
     title: 'node lib/cli.mjs evidence.json', sub: 'Tested code decides the verdict, not the model — exit 0 PASS, 1 FAIL, 2 could not evaluate',
     chips: [
@@ -270,6 +331,20 @@ const DIAGRAM = [
       { text: 'inherited row → no override to check', mode: 'extended' },
       { text: 'minor drift fails only at 2+ viewports', mode: 'extended' },
       { text: 'no viewports captured → exit 2, not PASS', mode: 'extended' },
+    ] },
+
+  { id: 'hook-report-guard', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'base',
+    title: 'Hook · report guard', sub: 'PreToolUse — report.md is refused if its verdict differs from the one the gate computes, or if the evidence could not be evaluated',
+    chips: [
+      { text: 'PASS over failing evidence → denied', mode: 'base' },
+      { text: 'unevaluable evidence (exit 2) → no report accepted', mode: 'extended' },
+    ] },
+
+  { id: 'hook-stop', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'base',
+    title: 'Hook · stop gate', sub: 'Stop — the session cannot end until report.md exists, is newer than evidence.json and states the recomputed verdict',
+    chips: [
+      { text: 'verdict recomputed, not trusted', mode: 'base' },
+      { text: 'stop_hook_active → one retry, then a warning', mode: 'extended' },
     ] },
 
   { id: 'verdict', phase: 3, kind: 'verdict', num: 6,

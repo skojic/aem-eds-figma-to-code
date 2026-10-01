@@ -13,7 +13,7 @@ const state = {
   selected: null,
   fill: 30,
   // shared layers: 'off' | 'base' | 'ext'
-  layers: { config: 'ext', gates: 'ext', mcp: 'ext', subagents: 'ext', model: 'ext' },
+  layers: { config: 'ext', gates: 'ext', hooks: 'ext', mcp: 'ext', subagents: 'ext', model: 'ext' },
 };
 
 const MODES = [
@@ -284,7 +284,7 @@ function basicNode(n, idx) {
     <div class="node__head">
       <span class="node__num">${String(idx).padStart(2, '0')}</span>
       <span class="node__title">${esc(n.title)}</span>
-      ${KIND_TAG[n.kind] ? `<span class="node__kind">${KIND_TAG[n.kind]}</span>` : ''}
+      ${(n.tag || KIND_TAG[n.kind]) ? `<span class="node__kind">${esc(n.tag || KIND_TAG[n.kind])}</span>` : ''}
     </div>
     ${n.sub ? `<div class="node__sub">${esc(n.sub)}</div>` : ''}`;
 

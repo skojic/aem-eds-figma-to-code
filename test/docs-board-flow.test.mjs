@@ -27,6 +27,7 @@ const PROSE_TOKENS = {
   'tool-figma': 'mcp.figma',
   'model-layout': 'layout extraction',
   'out-spec': 'design.matrix.json',
+  'hook-matrix-check': 'matrix check hook',
   'sub-tokens': 'token-gap pass',
 
   // 02 Capture & build
@@ -37,13 +38,17 @@ const PROSE_TOKENS = {
 
   // 03 Validate
   'step-validate': null,
+  'hook-preflight': 'preflight hook',
   'gate-validate': 'pre-flight fail-stops',
   'tool-content': 'content store',
   'tool-browser': 'browser breakpoint loop',
   'sub-diff': 'visual diff',
   'sub-compare': 'computed-style comparison',
   'out-evidence': 'evidence.json',
+  'hook-evidence-check': 'evidence check hook',
   'verdict-core': 'lib/cli.mjs',
+  'hook-report-guard': 'report guard hook',
+  'hook-stop': 'stop gate hook',
   verdict: 'PASS / FAIL',
 };
 
