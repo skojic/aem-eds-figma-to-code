@@ -45,9 +45,43 @@ whether the gate is *accurate* rather than merely implemented, which is a
 different question and the more interesting one.
 
 ```bash
-npm test            # verdict core · skill contracts · presentation data · docs vs diagram
+npm test            # verdict core · hooks · skill contracts · presentation data · docs vs diagram
 npm run typecheck   # JSDoc types via checkJs — no build step, no emitted output
 ```
+
+---
+
+## Why hooks
+
+The verdict is already decided by code. What code cannot do from inside a
+SKILL.md is make sure it *ran*. Everything around the gate is an instruction to
+the model — run `cli.mjs`, write what it printed, stop when a fetch fails — and an
+instruction can be forgotten, skipped, or quietly contradicted. A hook is executed
+by Claude Code itself, so the rule holds whether or not the model remembers it.
+
+The hooks never decide a verdict. `verdict.mjs` still does that. They close the
+gaps around it:
+
+| Hook | Event | What it enforces |
+|---|---|---|
+| `preflight.mjs` | `UserPromptExpansion` on `/figma-validate` | Blocks the run before it starts if the config, `design.md`, a parseable and well-shaped `design.matrix.json`, or a `figma-*.png` is missing — and names the skill that produces each. |
+| `artifact-check.mjs` | `PostToolUse` on `Write`/`Edit` | Validates `design.matrix.json` and `evidence.json` the moment they are written, so a malformed file is fixed immediately instead of at the end of a browser loop. Also flags a sidecar container that `design.md` never mentions. |
+| `report-guard.mjs` | `PreToolUse` on `Write`/`Edit` | Refuses a `report.md` whose `**Verdict**:` contradicts what the gate computes from `evidence.json`, and refuses any report when the evidence cannot be evaluated (the exit-2 case). |
+| `verdict-stop.mjs` | `Stop` | A session that wrote `evidence.json` cannot finish until `report.md` exists, is newer than the evidence, and states the recomputed verdict. A `stop_hook_active` guard lets a second stop through with a warning rather than trapping the session. |
+
+Two properties are deliberate. The checks are **pure functions** in
+`lib/guards.mjs` and `lib/schema.mjs`, tested like the verdict core; the hook
+scripts only translate them into exit codes and JSON. And the Stop hook
+**re-derives** the verdict rather than trusting anything recorded earlier, so a
+tampered or stale report is caught by recomputation, not by comparison with
+another claim.
+
+Limits worth knowing: the hooks check files, not browser state, so the dev
+server, browser MCP and content store stay with the skill's fail-stop rules. They
+are project-level settings, not SKILL.md frontmatter, because frontmatter hooks
+register only after the skill has run and a frontmatter `Stop` hook is converted
+to `SubagentStop`. And they enforce *agreement with the gate*, not that the gate's
+thresholds are right — that question is in [docs/TESTING.md](docs/TESTING.md).
 
 ---
 
@@ -99,6 +133,11 @@ The methodology on top transfers to other CSS projects by editing the `component
 
 3. The skills read `figma-to-code.config.md` on every invocation. If it is missing they fail-stop and point you at the template.
 
+4. *(Optional, recommended)* Enable the [hooks](#why-hooks): merge
+   `.claude/skills/figma-validate/hooks/settings.snippet.json` into your project's
+   `.claude/settings.json`. The scripts travel with the `figma-validate` directory
+   you already copied; the snippet assumes that location.
+
 ---
 
 ## The loop
@@ -131,7 +170,7 @@ Full prerequisites, exact invocations, and fail-stop behaviour are documented in
 | Requirement | Role | Notes |
 |---|---|---|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | skill runner | Required. |
-| Node.js 18+ | runs the verdict core | Required for `figma-validate` — it shells out to `lib/cli.mjs`. No packages to install: the modules are dependency-free ESM. If `node` is not on PATH the skill fail-stops rather than adjudicating the checks by hand. |
+| Node.js 18+ | runs the verdict core and the hooks | Required for `figma-validate` — it shells out to `lib/cli.mjs`. No packages to install: the modules are dependency-free ESM. If `node` is not on PATH the skill fail-stops rather than adjudicating the checks by hand. |
 | Figma MCP | `mcp.figma` in config | Required. Used by `figma-specify` and `figma-screenshot`. |
 | Browser MCP | `mcp.browser` in config | Required for `figma-validate` (e.g. `chrome-devtools` MCP). |
 | Ticket-tracker MCP | `mcp.ticket_tracker` in config | Optional. If absent, pass a Figma URL directly to `/figma-specify`. |

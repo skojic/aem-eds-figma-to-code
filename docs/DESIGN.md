@@ -205,3 +205,19 @@ would mean the reference implementation could not be stood up without one.
 
 **It ships without numbers.** A reference implementation has no production runs to count, and
 publishing an empty dashboard would repeat the defect this addendum exists to correct.
+
+---
+
+## Addendum — 2026-10-01: enforcement hooks
+
+**Decision.** Add four Claude Code hooks around the verdict core (pre-flight, artifact schema check, report guard, stop gate). They enforce that the gate runs and that nothing contradicts it; they never compute a verdict.
+
+**Why.** Moving the verdict into `verdict.mjs` fixed *how* it is decided but not *whether* the model runs it, writes what it printed, or stops when evidence is unusable. Those were still prose.
+
+**Placement.** Project-level `settings.json`, not SKILL.md frontmatter. Frontmatter hooks register only after the skill is invoked, which is too late to pre-flight the invocation, and a frontmatter `Stop` hook is converted to `SubagentStop`. The scripts still ship inside `skills/figma-validate/hooks/` so copying the skill directory carries them.
+
+**Logic lives in `lib/`.** `guards.mjs` and `schema.mjs` are pure and dependency-free like the rest of `lib/`; the hook scripts are thin adapters. The adapters are tested by spawning them with realistic payloads.
+
+**Fail-open points.** If `node` is missing the pre-flight blocks, but the other three would be a non-blocking error; validation cannot run without node anyway. If the `UserPromptExpansion` payload carries no recognisable ticket, pre-flight allows with a warning rather than blocking on a shape it cannot read.
+
+**Deliberately not built.** Auto-running `/figma-validate` after edits (slow, races the gate); block-CSS lint on edit; a spec-freeze prompt; an audit log. Each is plausible, none closes a gap the gate has today.

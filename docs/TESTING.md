@@ -119,6 +119,24 @@ One practical note: if you script this, restore the file explicitly. An `EXIT`
 trap does not fire in a persistent shell session, and a mutation can survive
 the run that was supposed to clean it up.
 
+## Testing the hooks
+
+The hook rules are pure functions (`lib/guards.mjs`, `lib/schema.mjs`) tested like
+the verdict core. `hooks.test.mjs` then spawns the real scripts with payloads in
+the shape Claude Code sends, because a correct rule behind a wrong exit code is
+the same as no rule — a hook that exits 1 instead of 2 does not block. The settings
+snippet is checked in both directions: every command names a script that exists,
+and every script is wired in.
+
+Nine mutations were applied and each was caught: the contradicting-verdict check,
+the partial-edit rule, the placeholder lookahead in `verdictIn`, the stale-report
+comparison, the Stop verdict comparison, the sidecar drift check, two schema rules,
+and the `stop_hook_active` loop guard.
+
+Payloads are built from the shapes the Claude Code hooks reference documents, so
+the scripts are exercised the way the harness calls them: JSON on stdin, a decision
+on stdout or an exit code.
+
 ## Measuring the gate itself
 
 Everything above answers *are the rules implemented correctly?* It does not

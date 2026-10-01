@@ -1,0 +1,49 @@
+{
+  "_comment": "Merge into <your-project>/.claude/settings.json. Paths assume the skill was copied to .claude/skills/figma-validate. These are project-level hooks, not SKILL.md frontmatter hooks: frontmatter hooks register only after the skill runs (too late to pre-flight its own invocation), and a frontmatter Stop hook is converted to SubagentStop.",
+  "hooks": {
+    "UserPromptExpansion": [
+      {
+        "matcher": "figma-validate",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null || { echo 'figma-validate needs node on PATH' >&2; exit 2; }; node \"$CLAUDE_PROJECT_DIR/.claude/skills/figma-validate/hooks/preflight.mjs\"",
+            "statusMessage": "Checking figma-validate pre-flight"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/figma-validate/hooks/report-guard.mjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/figma-validate/hooks/artifact-check.mjs\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/figma-validate/hooks/verdict-stop.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

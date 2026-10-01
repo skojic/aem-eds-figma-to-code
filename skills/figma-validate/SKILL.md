@@ -62,6 +62,14 @@ resolved directory.
 5. **Dev server running** — start via your project's local dev command. If port not bound, start it (`run_in_background`) and wait for ready.
 6. **`mcp.browser` server available**. If the MCP is not connected, **STOP** per the Fail-Stop rule below — do not substitute.
 
+**Enforced by hooks when installed.** Items 2, 2b and 3 (and the config file)
+are also checked by `hooks/preflight.mjs` before this skill starts,
+`hooks/artifact-check.mjs` validates `design.matrix.json` and `evidence.json` as
+they are written, and the verdict rules below are enforced by
+`hooks/report-guard.mjs` and `hooks/verdict-stop.mjs`. The hooks are optional — merge `hooks/settings.snippet.json`
+into the project's `.claude/settings.json` (see the README). Installed or not, do the checks above: the hooks are a backstop,
+not a substitute.
+
 **Fail-Stop rule:** When any external resource fetch fails — MCP call, URL, API endpoint — STOP immediately. Do not fabricate, infer, or guess the missing content. Report which MCP or resource failed and wait for the user to resolve it.
 
 ## Inputs
@@ -318,6 +326,11 @@ Write `<spec-dir>/validation/report.md`:
 - [ ] Fix #1 — file:line — what to change
 - [ ] Fix #2 — …
 ```
+
+**The `**Verdict**:` line must be the one `lib/cli.mjs` printed.** With the
+hooks installed, a report that states a different verdict than the gate computes
+from `evidence.json` is refused, no report is accepted when the evidence cannot
+be evaluated (exit 2), and the session cannot end with a stale or missing report.
 
 Then output a concise summary to the conversation:
 - Verdict (PASS / FAIL)

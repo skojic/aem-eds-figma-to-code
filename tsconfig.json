@@ -22,5 +22,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["skills/**/lib/**/*.mjs"]
+  "include": ["skills/**/lib/**/*.mjs", "skills/**/hooks/**/*.mjs"]
 }

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
@@ -107,5 +107,36 @@ describe('frontmatter reader', () => {
   it('folds continuation lines into the preceding key', () => {
     const { fields } = readFrontmatter('---\ndescription: one\n  two\n---\n');
     expect(fields.description).toBe('one two');
+  });
+});
+
+describe('figma-validate hooks', () => {
+  // The settings snippet is what users copy into their project. A script it
+  // names that does not exist fails at runtime as a non-blocking hook error —
+  // the gate silently stops being enforced. Assert both directions: every
+  // command points at a real script, and every hook script is wired in.
+  const hooksDir = join(SKILLS_DIR, 'figma-validate', 'hooks');
+  const snippet = JSON.parse(readFileSync(join(hooksDir, 'settings.snippet.json'), 'utf8'));
+  const commands = Object.values(snippet.hooks)
+    .flat()
+    .flatMap((group) => group.hooks.map((h) => h.command));
+
+  it('wires exactly the four phase-1 events', () => {
+    expect(Object.keys(snippet.hooks).sort()).toEqual(['PostToolUse', 'PreToolUse', 'Stop', 'UserPromptExpansion']);
+  });
+
+  it('points every command at a script that exists', () => {
+    for (const command of commands) {
+      const script = /hooks\/([\w-]+\.mjs)/.exec(command)?.[1];
+      expect(script, command).toBeTruthy();
+      expect(existsSync(join(hooksDir, /** @type {string} */ (script))), command).toBe(true);
+    }
+  });
+
+  it('wires every hook script that is not a shared helper', () => {
+    const scripts = readdirSync(hooksDir).filter((f) => f.endsWith('.mjs') && f !== 'stdin.mjs');
+    for (const script of scripts) {
+      expect(commands.some((c) => c.includes(script)), script).toBe(true);
+    }
   });
 });
