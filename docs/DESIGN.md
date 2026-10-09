@@ -271,8 +271,9 @@ report text is written for any team reading it. The log path is config
 (`run_log_path`) and belongs in the consuming project's `.gitignore`.
 
 **Decision 3 — coverage is reported in CI, not gated.** `@vitest/coverage-v8` and `vitest` are both
-pinned to 3.2.7, because the plugin declares an exact peer version. Dev-only, like the rest of
-`package.json`.
+pinned to 5.0.3, because the plugin declares an exact peer version. Dev-only, like the rest of
+`package.json`. Vitest 5 requires Node 22.12 or later, so that is the floor for running the test
+suite; the pack itself has no dependencies and its Node requirement is unchanged.
 
 **Not ported.** The originating project's agent-pipeline instruction changes (out of scope by §1),
 its tests for its own application code, and its SonarCloud upload.
