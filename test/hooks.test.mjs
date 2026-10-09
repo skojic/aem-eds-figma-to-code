@@ -2,7 +2,9 @@ import { spawnSync } from 'node:child_process';
 import { utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { FAILING_EVIDENCE, PASSING_EVIDENCE, makeProject } from './helpers/project.mjs';
+import {
+  AXE_FAILING_EVIDENCE, FAILING_EVIDENCE, PASSING_EVIDENCE, makeProject,
+} from './helpers/project.mjs';
 
 // The unit tests prove the rules. These prove the scripts Claude Code actually
 // runs turn those rules into the exit codes and JSON the harness expects — the
@@ -74,6 +76,31 @@ describe('report-guard.mjs (PreToolUse)', () => {
       tool_input: { file_path: join(validation, 'report.md'), content: '**Verdict**: PASS' },
     });
     expect(r).toMatchObject({ code: 0, out: '' });
+  });
+
+  it('denies a PASS over evidence whose only failure is an axe violation', () => {
+    // The runtime rules live in verdict.mjs, so the guard enforces them with
+    // no change of its own. This pins that it actually does.
+    const { validation } = makeProject();
+    writeFileSync(join(validation, 'evidence.json'), JSON.stringify(AXE_FAILING_EVIDENCE));
+    const r = run('report-guard.mjs', {
+      tool_name: 'Write',
+      tool_input: { file_path: join(validation, 'report.md'), content: '**Verdict**: PASS' },
+    });
+    expect(JSON.parse(r.out).hookSpecificOutput.permissionDecision).toBe('deny');
+  });
+
+  it('denies any report over evidence with no runtime record', () => {
+    const { validation } = makeProject();
+    const { runtime, ...noRuntime } = PASSING_EVIDENCE;
+    writeFileSync(join(validation, 'evidence.json'), JSON.stringify(noRuntime));
+    const r = run('report-guard.mjs', {
+      tool_name: 'Write',
+      tool_input: { file_path: join(validation, 'report.md'), content: '**Verdict**: PASS' },
+    });
+    const out = JSON.parse(r.out).hookSpecificOutput;
+    expect(out.permissionDecision).toBe('deny');
+    expect(out.permissionDecisionReason).toMatch(/could not be evaluated/);
   });
 
   it('checks the replacement text of an Edit', () => {

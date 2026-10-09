@@ -44,12 +44,16 @@ const PROSE_TOKENS = {
   'tool-browser': 'browser breakpoint loop',
   'sub-diff': 'visual diff',
   'sub-compare': 'computed-style comparison',
+  'tool-a11y': 'accessibility pass',
+  'tool-perf': 'performance trace',
+  'gate-tests': 'lint and tests',
   'out-evidence': 'evidence.json',
   'hook-evidence-check': 'evidence check hook',
   'verdict-core': 'lib/cli.mjs',
   'hook-report-guard': 'report guard hook',
-  'hook-stop': 'stop gate hook',
   verdict: 'PASS / FAIL',
+  'out-runlog': 'run log',
+  'hook-stop': 'stop gate hook',
 };
 
 /** Lane label in the doc, keyed by phase number. */

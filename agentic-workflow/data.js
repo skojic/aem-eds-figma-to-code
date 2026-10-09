@@ -12,7 +12,7 @@ const LAYERS = [
   { id: 'config',    label: 'Config',    kind: 'context',  hint: 'figma-to-code.config.md + token files loaded into context' },
   { id: 'gates',     label: 'Gates',     kind: 'gate',     hint: 'Pre-flight fail-stop checks — missing data blocks the run' },
   { id: 'hooks',     label: 'Hooks',     kind: 'gate',     hint: 'Claude Code hooks that enforce the gate — pre-flight, schema checks, report guard, stop gate' },
-  { id: 'mcp',       label: 'MCP',       kind: 'tool',     hint: 'figma / browser / ticket-tracker / content-store MCP calls' },
+  { id: 'mcp',       label: 'MCP',       kind: 'tool',     hint: 'figma / browser / ticket-tracker / content-store MCP calls — including the axe, keyboard and performance passes' },
   { id: 'subagents', label: 'Subagents', kind: 'subagent', hint: 'Delegated visual-diff and token-resolution passes' },
   { id: 'model',     label: 'Model',     kind: 'model',    hint: 'Model decision points: layout extraction, diff, verdict' },
 ];
@@ -38,11 +38,11 @@ const STAGES = [
   { n: 0, label: 'plain', caption: 'Plain EDS project — no skill pack yet. Claude has your source, nothing else.' },
   { n: 1, label: 'specify', caption: 'Skill 1 copied in: /figma-specify can now read Figma and write a spec.' },
   { n: 2, label: 'screenshot', caption: 'Skill 2 copied in: /figma-screenshot saves audit-trail PNGs next to the spec.' },
-  { n: 3, label: 'validate', caption: 'Skill 3 copied in: /figma-validate drives a browser and emits PASS/FAIL. Its four hook scripts come with it.' },
-  { n: 4, label: 'config', caption: 'Config filled in and the hooks wired into .claude/settings.json. Every skill fail-stops without the config — it is the only project-specific skill file.' },
+  { n: 3, label: 'validate', caption: 'Skill 3 copied in: /figma-validate drives a browser and emits PASS/FAIL. Its lib/ modules (verdict core, run log) and four hook scripts come with it.' },
+  { n: 4, label: 'config', caption: 'Config filled in, the hooks wired into .claude/settings.json and the run log added to .gitignore. Every skill fail-stops without the config — it is the only project-specific skill file.' },
   { n: 5, label: 'spec', caption: '/figma-specify has run: design.md is the source of truth for HTML/CSS.' },
   { n: 6, label: 'build', caption: '/figma-screenshot has run and you implemented the block from design.md.' },
-  { n: 7, label: 'report', caption: '/figma-validate has run: screenshots, snapshots and a PASS/FAIL report.' },
+  { n: 7, label: 'report', caption: '/figma-validate has run: screenshots, snapshots, axe results, a PASS/FAIL report — and one more row in the run log.' },
 ];
 
 /* --- Diagram phases (lanes) --------------------------------- */
@@ -63,6 +63,7 @@ const FILES = [
     title: 'Project manifest',
     desc: 'Supplies lint_cmd and test_cmd for the validation gate. Both are optional — figma-validate skips a gate whose command is empty in config, and records it as skipped rather than passed.',
     code: '"scripts": {\n  "lint": "eslint . && stylelint styles/**/*.css"\n}\n\n// test_cmd is optional. Empty = the gate\n// reports "skipped", never "pass".',
+    node: 'gate-tests',
   },
   {
     path: 'styles/styles.css', stage: 0, status: 'committed',
@@ -103,9 +104,51 @@ const FILES = [
   {
     path: '.claude/skills/figma-validate/SKILL.md', stage: 3, status: 'pack',
     title: 'Skill — /figma-validate',
-    desc: 'Renders authored content at every configured breakpoint through the browser MCP, spot-checks computed styles against the Layout Matrix, resolves tokens, runs lint + tests, emits PASS/FAIL.',
-    code: '---\nname: figma-validate\ndisable-model-invocation: true\n---\n\nPASS requires: no blocker deltas,\nevery Layout Matrix row matching,\nlint_cmd 0, test_cmd 0.',
+    desc: 'Renders authored content at every configured breakpoint through the browser MCP, spot-checks computed styles against the Layout Matrix, resolves tokens, runs axe-core, a keyboard pass and a CLS trace, runs lint + tests, emits PASS/FAIL and appends the run to the log.',
+    code: '---\nname: figma-validate\ndisable-model-invocation: true\n---\n\nPASS requires: no blocker deltas,\nevery Layout Matrix row matching,\nzero axe violations in the block,\nkeyboard pass clean, block CLS <= 0.1,\nlint_cmd 0, test_cmd 0.',
     node: 'step-validate',
+  },
+  {
+    path: '.claude/skills/figma-validate/lib/compare.mjs', stage: 3, status: 'pack',
+    title: 'Compare one CSS property',
+    desc: 'Normalises a computed reading and the spec value before comparing them, so 2rem matches 32px, gap: normal matches 0px and a flex-flow reading of "row nowrap" matches "row". Assigns blocker or minor severity; an unreadable computed value is a blocker, never a match.',
+    code: 'compareRow(row, computedStyles)\n→ { container: ".teaser-inner",\n    breakpoint: "1024",\n    results: [{ prop: "gap", match: false,\n      severity: "minor",\n      reason: "expected 32px, computed 32.5px\n               (0.50px out)" }] }',
+    node: 'sub-compare',
+  },
+  {
+    path: '.claude/skills/figma-validate/lib/verdict.mjs', stage: 3, status: 'pack',
+    title: 'The PASS/FAIL rules, executed',
+    desc: 'Every verdict rule in one tested module: blockers fail, inherited rows have no override to be wrong about, minor drift fails at two or more viewports, and the runtime rules — axe, keyboard, CLS, lazy first-section image. Unusable evidence throws instead of returning a verdict.',
+    code: 'evaluate(evidence)\n→ { verdict: "FAIL",\n    blockers: ["axe @ desktop: color-contrast …"],\n    failedChecks: ["axe"],\n    runtime: { axeViolations: 1, cls: 0.02 } }',
+    node: 'verdict-core',
+  },
+  {
+    path: '.claude/skills/figma-validate/lib/cli.mjs', stage: 3, status: 'pack',
+    title: 'The gate at the process boundary',
+    desc: 'Runs the verdict core over evidence.json and turns the outcome into an exit code: 0 PASS, 1 FAIL, 2 could not evaluate. Kept separate so verdict.mjs stays a pure import with no process or filesystem access.',
+    code: '$ node lib/cli.mjs validation/evidence.json\n**Verdict**: FAIL\n…\n$ echo $?\n1',
+    node: 'verdict-core',
+  },
+  {
+    path: '.claude/skills/figma-validate/lib/schema.mjs', stage: 3, status: 'pack',
+    title: 'Shape checks for the gate artifacts',
+    desc: 'Validates design.matrix.json and evidence.json — including the runtime section — and returns every problem in one pass, so a hook can hand the model the full list at once instead of one defect per round trip.',
+    code: 'validateEvidence(evidence)\n→ ["runtime.keyboard.noTrap must be a boolean",\n   "runtime.performance.cls must be a\n    non-negative number when the trace ran"]',
+    node: 'hook-evidence-check',
+  },
+  {
+    path: '.claude/skills/figma-validate/lib/guards.mjs', stage: 3, status: 'pack',
+    title: 'The decision logic behind all four hooks',
+    desc: 'Pure functions for pre-flight, the artifact check, the report guard and the stop gate. The hook scripts only read stdin, call one of these and translate the answer into an exit code or a JSON decision.',
+    code: 'checkPreflight({ cwd, ticket })\ncheckArtifact(filePath)\ncheckReportWrite({ filePath, content })\ncheckStop(evidencePaths)',
+    node: 'hook-report-guard',
+  },
+  {
+    path: '.claude/skills/figma-validate/lib/runlog.mjs', stage: 3, status: 'pack',
+    title: 'The run log — is the gate accurate?',
+    desc: 'Appends one row per run, derived from evidence.json by the same code that decided the verdict: verdict, first failing check, axe violation count, CLS. Reviewers add false-pass and false-fail corrections as new rows, never edits. The report divides false passes by passes and false fails by fails — the two numbers that measure the control rather than the activity.',
+    code: '$ node lib/runlog.mjs report\n\nRuns            <runs> across <tickets> ticket(s)\nVerdicts        <pass> PASS · <fail> FAIL\n\nFalse passes    <n> of <pass> passes (<%>)\nFalse fails     <n> of <fail> fails (<%>)',
+    node: 'out-runlog',
   },
   {
     path: '.claude/skills/figma-validate/hooks/preflight.mjs', stage: 3, status: 'pack',
@@ -136,10 +179,24 @@ const FILES = [
     node: 'hook-stop',
   },
   {
+    path: '.claude/skills/figma-validate/hooks/stdin.mjs', stage: 3, status: 'pack',
+    title: 'Shared helper — the hook payload',
+    desc: 'Reads the JSON payload Claude Code writes to stdin, for every hook script. A payload that cannot be parsed is treated as empty, so the hook finds nothing it guards and allows. Not wired as a hook itself; it travels with the directory.',
+    code: 'import { readPayload } from "./stdin.mjs";\n\nconst payload = await readPayload();\n// → { tool_name, tool_input, cwd, … } — or {} if unparseable',
+    node: 'hook-preflight',
+  },
+  {
+    path: '.claude/skills/figma-validate/hooks/settings.snippet.json', stage: 3, status: 'pack',
+    title: 'Hook wiring, ready to merge',
+    desc: 'The four hook registrations, with the paths the scripts have once the skill directory is copied in. Merging it into .claude/settings.json (stage 4) is what turns the scripts on.',
+    code: '{ "hooks": {\n  "UserPromptExpansion": […preflight.mjs],\n  "PostToolUse":  […artifact-check.mjs],\n  "PreToolUse":   […report-guard.mjs],\n  "Stop":         […verdict-stop.mjs] } }',
+    node: 'hook-preflight',
+  },
+  {
     path: 'figma-to-code.config.md', stage: 4, status: 'config',
     title: 'The only project-specific file',
     desc: 'Binds MCP roles, breakpoints, themes, token files, output paths and lint/test commands. Missing → every skill fail-stops and points at the template. The SKILL.md files stay unedited.',
-    code: 'mcp:\n  figma: "figma"\n  browser: "chrome-devtools"\n  content_store: "da-live"\nspec_output_path: "drafts/specs/{ticket}/design.md"\nbreakpoints:\n  - { name: "mobile",  min: 320 }\n  - { name: "tablet",  min: 768 }\n  - { name: "desktop", min: 1024 }',
+    code: 'mcp:\n  figma: "figma"\n  browser: "chrome-devtools"\n  content_store: "da-live"\nspec_output_path: "drafts/specs/{ticket}/design.md"\nbreakpoints:\n  - { name: "mobile",  min: 320 }\n  - { name: "tablet",  min: 768 }\n  - { name: "desktop", min: 1024 }\nruntime_checks: { axe: true, keyboard: true, performance: true }\nrun_log_path: ".figma-validate/runs.jsonl"',
     node: 'payload',
   },
 
@@ -149,6 +206,13 @@ const FILES = [
     desc: 'The pack ships hooks/settings.snippet.json; merging it here registers the four hooks at project level. They are project settings, not SKILL.md frontmatter, because frontmatter hooks register only after the skill has run — too late to pre-flight its own invocation — and a frontmatter Stop hook is converted to SubagentStop.',
     code: '"hooks": {\n  "UserPromptExpansion": [{ "matcher": "figma-validate", … }],\n  "PreToolUse":  [{ "matcher": "Write|Edit", … }],\n  "PostToolUse": [{ "matcher": "Write|Edit", … }],\n  "Stop":        [{ … }]\n}',
     node: 'hook-preflight',
+  },
+  {
+    path: '.gitignore', stage: 4, status: 'config',
+    title: 'Keep the run log out of git',
+    desc: 'One line, added at install. The run log rows carry ticket IDs, so run_log_path belongs here; everything under drafts/specs/ stays committed as review evidence.',
+    code: '# figma-validate run log — rows carry ticket IDs\n.figma-validate/',
+    node: 'out-runlog',
   },
 
   {
@@ -175,8 +239,15 @@ const FILES = [
   {
     path: 'drafts/specs/PROJ-123/validation/browser-desktop.png', stage: 7, status: 'evidence',
     title: 'Rendered at the desktop breakpoint',
-    desc: 'One screenshot per configured breakpoint, captured through the browser MCP after emulating the viewport and waiting for the block root selector.',
-    code: 'emulate  → width 1024, height 800\nwait_for → .teaser\ntake_screenshot',
+    desc: 'One screenshot per configured breakpoint, captured through the browser MCP after emulating the viewport, waiting for known authored text, and then polling until every instance of the block reports it has finished loading.',
+    code: 'emulate         → width 1024, height 800\nwait_for        → "V1 — teaser"   (text, not a selector)\nevaluate_script → every .teaser has\n                  data-block-status="loaded"\ntake_screenshot',
+    node: 'tool-browser',
+  },
+  {
+    path: 'drafts/specs/PROJ-123/validation/browser-desktop-dark.png', stage: 7, status: 'evidence',
+    title: 'Rendered per theme',
+    desc: 'One extra screenshot per theme listed in config themes, with the theme applied, so colour-bound elements — CTAs, headings, backgrounds — can be checked against each theme\'s token overrides. Not written when themes is empty.',
+    code: 'themes: ["light", "dark"]\n→ browser-desktop-light.png\n→ browser-desktop-dark.png',
     node: 'tool-browser',
   },
   {
@@ -187,10 +258,17 @@ const FILES = [
     node: 'tool-browser',
   },
   {
+    path: 'drafts/specs/PROJ-123/validation/axe-desktop.json', stage: 7, status: 'evidence',
+    title: 'axe-core result, scoped to the block',
+    desc: 'The raw axe-core result at one viewport (and theme), limited to the block so header and footer chrome cannot fail the ticket. Its violations and incomplete count are copied into evidence.json; the raw file is kept so a FAIL can be read without re-running the browser.',
+    code: '{ "loaded": true, "version": "4.14.0",\n  "violations": [{\n    "id": "color-contrast",\n    "impact": "serious",\n    "nodes": [".teaser-cta"] }],\n  "incomplete": [] }',
+    node: 'tool-a11y',
+  },
+  {
     path: 'drafts/specs/PROJ-123/validation/evidence.json', stage: 7, status: 'gathered',
     title: 'Everything gathered, before anything is decided',
-    desc: 'The whole input to the verdict, written before the verdict exists: per-viewport computed-style comparisons, token resolutions, console and network counts, visual-delta severities, and the lint/test gate statuses. The split is the point — the skill gathers, the code decides. It also makes a run reproducible: re-running the verdict over the same evidence cannot produce a different answer.',
-    code: '{\n  "viewports": [{\n    "name": "desktop",\n    "rows": [{ "container": ".teaser-inner",\n      "inherited": false,\n      "results": [{ "prop": "gap",\n        "match": false, "severity": "minor" }] }],\n    "consoleErrors": 0,\n    "networkFailures": 0\n  }],\n  "gates": { "lint": "pass", "test": "skipped" }\n}',
+    desc: 'The whole input to the verdict, written before the verdict exists: per-viewport computed-style comparisons, token resolutions, console and network counts, visual-delta severities, the lint/test gate statuses, and the runtime section — axe, keyboard, performance. The split is the point — the skill gathers, the code decides. A runtime check with no recorded status makes the gate exit 2: not measured is never passed.',
+    code: '{\n  "viewports": [{ "name": "desktop", "rows": […],\n    "consoleErrors": 0, "networkFailures": 0 }],\n  "gates": { "lint": "pass", "test": "skipped" },\n  "runtime": {\n    "axe": { "status": "ran", "runs": [\n      { "viewport": "desktop", "violations": [] }] },\n    "keyboard": { "status": "ran",\n      "reachedInOrder": true, "visibleFocus": true,\n      "noTrap": true },\n    "performance": { "status": "ran", "cls": 0.02 }\n  }\n}',
     node: 'out-evidence',
   },
   {
@@ -199,6 +277,13 @@ const FILES = [
     desc: 'Verdict plus Layout Matrix verification, token resolution, console/network summary, lint and test results, and a remediation checklist. FAIL sends you back to the implementation step.',
     code: '**Verdict**: FAIL\n\n| Container     | BP   | Expected | Computed | ✓ |\n|---------------|------|----------|----------|---|\n| .teaser-inner | 1024 | gap:48px | gap:32px | ✗ |\n\n- [ ] Restate gap in the ≥1024px block',
     node: 'verdict',
+  },
+  {
+    path: '.figma-validate/runs.jsonl', stage: 7, status: 'log',
+    title: 'One row per run — gitignored',
+    desc: 'The append-only log runlog.mjs writes after every verdict. Rows carry ticket IDs, so the file belongs in .gitignore. Unmeasured checks are left out of a row rather than written as 0, so a run where axe never loaded cannot count as a clean one.',
+    code: '{"type":"run","ticket":"PROJ-123","verdict":"FAIL",\n "check":"axe","a11y":1,"cls":0.02,"at":"…"}\n{"type":"false-fail","ticket":"PROJ-120",\n "note":"contrast was over a photo","at":"…"}',
+    node: 'out-runlog',
   },
 ];
 
@@ -301,6 +386,7 @@ const DIAGRAM = [
       { text: 'evaluate_script → computed styles', mode: 'extended' },
       { text: 'list_console_messages', mode: 'extended' },
       { text: 'list_network_requests (failures)', mode: 'extended' },
+      { text: 'repeat per theme in config themes', mode: 'extended' },
     ] },
 
   { id: 'sub-diff', phase: 3, kind: 'subagent', layer: 'subagents', mode: 'base',
@@ -313,8 +399,34 @@ const DIAGRAM = [
       { text: 'unverifiable reading → blocker, never a pass', mode: 'extended' },
     ] },
 
+  { id: 'tool-a11y', phase: 3, kind: 'tool', layer: 'mcp', mode: 'base',
+    title: 'Accessibility pass — axe-core + keyboard', sub: 'axe scoped to the block at the smallest and largest viewport and per theme; then Tab through every focusable element',
+    chips: [
+      { text: 'axe violation → FAIL', mode: 'base' },
+      { text: 'axe did not load → FAIL, not "0 violations"', mode: 'base' },
+      { text: 'reached in order · visible focus · no trap', mode: 'extended' },
+      { text: 'incomplete → manual review, not a fail', mode: 'extended' },
+      { text: 'Lighthouse score → context only', mode: 'extended' },
+    ] },
+
+  { id: 'tool-perf', phase: 3, kind: 'tool', layer: 'mcp', mode: 'extended',
+    title: 'Performance trace', sub: 'Lab trace on the local dev server, mobile + 4× CPU throttle',
+    chips: [
+      { text: 'block-caused CLS > 0.1 → FAIL', mode: 'extended' },
+      { text: 'unattributed shift → FAIL', mode: 'extended' },
+      { text: 'lazy first-section image → FAIL', mode: 'extended' },
+      { text: 'LCP → informational only', mode: 'extended' },
+    ] },
+
+  { id: 'gate-tests', phase: 3, kind: 'gate', layer: 'gates', mode: 'base',
+    title: 'Lint + tests', sub: 'lint_cmd and test_cmd from config, exit codes recorded as gate statuses',
+    chips: [
+      { text: 'exit 0 → pass, non-zero → FAIL', mode: 'base' },
+      { text: 'empty command → skipped, never pass', mode: 'extended' },
+    ] },
+
   { id: 'out-evidence', phase: 3, kind: 'output',
-    title: 'evidence.json written', sub: 'Every check, count and gate status — recorded before the verdict is decided' },
+    title: 'evidence.json written', sub: 'Every check, count and gate status, plus the runtime section — recorded before the verdict is decided' },
 
   { id: 'hook-evidence-check', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'extended',
     title: 'Hook · artifact-check', sub: 'PostToolUse — evidence.json is shape-checked on write; the problems go straight back to the model',
@@ -322,15 +434,19 @@ const DIAGRAM = [
       { text: 'match must be a boolean', mode: 'extended' },
       { text: 'a mismatch needs a severity', mode: 'extended' },
       { text: 'empty viewports → rejected', mode: 'extended' },
+      { text: 'runtime section missing → rejected', mode: 'extended' },
     ] },
 
   { id: 'verdict-core', phase: 3, kind: 'gate', layer: 'gates', mode: 'base',
     title: 'node lib/cli.mjs evidence.json', sub: 'Tested code decides the verdict, not the model — exit 0 PASS, 1 FAIL, 2 could not evaluate',
     chips: [
       { text: 'blocker at any viewport → FAIL', mode: 'base' },
+      { text: 'axe violation or axe not loaded → FAIL', mode: 'base' },
       { text: 'inherited row → no override to check', mode: 'extended' },
       { text: 'minor drift fails only at 2+ viewports', mode: 'extended' },
+      { text: 'block CLS > 0.1 → FAIL', mode: 'extended' },
       { text: 'no viewports captured → exit 2, not PASS', mode: 'extended' },
+      { text: 'no runtime record → exit 2, not PASS', mode: 'extended' },
     ] },
 
   { id: 'hook-report-guard', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'base',
@@ -340,18 +456,27 @@ const DIAGRAM = [
       { text: 'unevaluable evidence (exit 2) → no report accepted', mode: 'extended' },
     ] },
 
-  { id: 'hook-stop', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'base',
-    title: 'Hook · stop gate', sub: 'Stop — the session cannot end until report.md exists, is newer than evidence.json and states the recomputed verdict',
-    chips: [
-      { text: 'verdict recomputed, not trusted', mode: 'base' },
-      { text: 'stop_hook_active → one retry, then a warning', mode: 'extended' },
-    ] },
-
   { id: 'verdict', phase: 3, kind: 'verdict', num: 6,
     title: 'PASS / FAIL', sub: 'report.md with remediation checklist',
     branches: [
       { label: 'PASS', tone: 'pass', text: 'Ship it — screenshots, snapshots and report land beside the spec' },
       { label: 'FAIL', tone: 'fail', text: 'Back to step 4 with a file:line remediation list; re-run and re-diff' },
+    ] },
+
+  { id: 'out-runlog', phase: 3, kind: 'output',
+    title: 'Run log appended', sub: 'lib/runlog.mjs — one row per run, derived from evidence.json; review later adds false-pass / false-fail corrections',
+    chips: [
+      { text: 'exit-2 evidence → not logged', mode: 'base' },
+      { text: 'false passes ÷ passes, false fails ÷ fails', mode: 'base' },
+    ] },
+
+  // Last on purpose: Stop fires when the session tries to end, after the
+  // report and the run-log row have been written.
+  { id: 'hook-stop', phase: 3, kind: 'gate', tag: 'hook', layer: 'hooks', mode: 'base',
+    title: 'Hook · stop gate', sub: 'Stop — the session cannot end until report.md exists, is newer than evidence.json and states the recomputed verdict',
+    chips: [
+      { text: 'verdict recomputed, not trusted', mode: 'base' },
+      { text: 'stop_hook_active → one retry, then a warning', mode: 'extended' },
     ] },
 ];
 
@@ -374,6 +499,10 @@ const SEGMENTS = [
     when: (s) => s.stage >= 6 && s.layers.mcp !== 'off' },
   { id: 'browser', label: 'Browser snapshots + screenshots', tokens: 12600, tone: 'pink', cached: false,
     when: (s) => s.stage >= 7 && s.layers.mcp !== 'off' },
+  // Rough estimate, not measured: axe results for one block plus a trace
+  // summary. The trace detail only loads when the MCP layer is extended.
+  { id: 'runtime', label: 'axe results + trace summary', tokens: 2500, tone: 'pink', cached: false,
+    when: (s) => s.stage >= 7 && s.layers.mcp === 'extended' },
 ];
 
 const BUDGET = 200000;          // ~200K context window

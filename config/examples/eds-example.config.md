@@ -31,6 +31,14 @@ breakpoints:
 
 lint_cmd: "npm run lint"
 test_cmd: "npm test"
+
+runtime_checks:
+  axe: true
+  keyboard: true
+  performance: true
+axe_core_version: "4.14.0"
+
+run_log_path: ".figma-validate/runs.jsonl"
 ```
 
 ## token_layer_model

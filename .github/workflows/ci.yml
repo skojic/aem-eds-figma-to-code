@@ -31,4 +31,8 @@ jobs:
       # pack installs by copying directories.
       - run: npm run typecheck
 
-      - run: npm test
+      # Coverage over the shipped modules only (skills/**/lib and hooks), printed
+      # to the job log. It is reported, not gated: a percentage threshold would
+      # reward tests written for the number rather than for a decision. The
+      # suite's real check is mutation-verification — see docs/TESTING.md.
+      - run: npm run test:coverage

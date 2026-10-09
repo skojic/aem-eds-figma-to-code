@@ -10,6 +10,8 @@
  * installs by copying directories.
  */
 
+import { AXE_STATUSES, CHECK_STATUSES } from './verdict.mjs';
+
 const ROW_SEVERITIES = ['blocker', 'minor'];
 const DELTA_SEVERITIES = ['blocker', 'major', 'minor'];
 const GATE_STATUSES = ['pass', 'fail', 'skipped'];
@@ -175,6 +177,80 @@ export function validateEvidence(evidence) {
       });
     }
   }
+
+  problems.push(...validateRuntime(evidence.runtime));
+
+  return problems;
+}
+
+/**
+ * The `runtime` section: axe-core, the keyboard pass and the performance trace.
+ * Mirrors the checks `verdict.mjs` throws on, but collects all of them.
+ *
+ * @param {unknown} runtime
+ * @returns {string[]}
+ */
+function validateRuntime(runtime) {
+  if (!isObject(runtime)) {
+    // Same reason the verdict core refuses it: silence is not a measurement.
+    return ['runtime is missing — record axe, keyboard and performance, or mark each skipped'];
+  }
+  /** @type {string[]} */
+  const problems = [];
+  const { axe, keyboard, performance, lighthouse } = runtime;
+
+  if (!isObject(axe) || !AXE_STATUSES.includes(/** @type {string} */ (axe.status))) {
+    problems.push(`runtime.axe.status must be one of ${AXE_STATUSES.join(', ')}`);
+  } else if (axe.status === 'ran') {
+    if (!Array.isArray(axe.runs) || axe.runs.length === 0) {
+      problems.push('runtime.axe ran but records no runs');
+    } else {
+      axe.runs.forEach((run, i) => {
+        const at = `runtime.axe.runs[${i}]`;
+        if (!isObject(run)) {
+          problems.push(`${at} is not an object`);
+          return;
+        }
+        if (typeof run.viewport !== 'string' || !run.viewport) problems.push(`${at}.viewport must be a non-empty string`);
+        if (!Array.isArray(run.violations)) {
+          problems.push(`${at}.violations must be an array`);
+        } else {
+          run.violations.forEach((v, j) => {
+            if (!isObject(v) || typeof v.id !== 'string') problems.push(`${at}.violations[${j}] needs a string id`);
+          });
+        }
+        if ('incomplete' in run && typeof run.incomplete !== 'number') problems.push(`${at}.incomplete must be a number`);
+      });
+    }
+  }
+
+  if (!isObject(keyboard) || !CHECK_STATUSES.includes(/** @type {string} */ (keyboard.status))) {
+    problems.push(`runtime.keyboard.status must be one of ${CHECK_STATUSES.join(', ')}`);
+  } else if (keyboard.status === 'ran') {
+    ['reachedInOrder', 'visibleFocus', 'noTrap'].forEach((key) => {
+      if (typeof keyboard[key] !== 'boolean') problems.push(`runtime.keyboard.${key} must be a boolean when the pass ran`);
+    });
+  }
+
+  if (!isObject(performance) || !CHECK_STATUSES.includes(/** @type {string} */ (performance.status))) {
+    problems.push(`runtime.performance.status must be one of ${CHECK_STATUSES.join(', ')}`);
+  } else if (performance.status === 'ran') {
+    const { cls } = performance;
+    if (typeof cls !== 'number' || !Number.isFinite(cls) || cls < 0) {
+      problems.push('runtime.performance.cls must be a non-negative number when the trace ran');
+    }
+    ['clsInsideBlock', 'firstSectionImageLazy'].forEach((key) => {
+      const v = performance[key];
+      if (key in performance && v !== null && typeof v !== 'boolean') {
+        problems.push(`runtime.performance.${key} must be true, false or null`);
+      }
+    });
+    if ('lcpMs' in performance && typeof performance.lcpMs !== 'number') {
+      problems.push('runtime.performance.lcpMs must be a number');
+    }
+  }
+
+  if (lighthouse !== undefined && !isObject(lighthouse)) problems.push('runtime.lighthouse must be an object');
 
   return problems;
 }

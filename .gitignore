@@ -6,6 +6,14 @@ docs/superpowers/
 # dependencies and the presentation stays dependency-free — see docs/DESIGN.md.
 node_modules/
 
+# Coverage output from npm run test:coverage (text reporters only, but keep it
+# out of git if a reporter that writes files is ever added).
+coverage/
+
+# Run log, if the pack's own skills are ever run against this repo. Rows carry
+# ticket identifiers; a consuming project should ignore its run_log_path too.
+.figma-validate/
+
 # OS / editor cruft
 .DS_Store
 *.swp

@@ -14,15 +14,17 @@ Three Claude Code skills that implement a Figma → spec → build → validate 
 |---|---|---|
 | `figma-specify` | `/figma-specify <ticket-or-slug>` | Extract visual/stylistic design context from Figma → write a `design.md` spec (source of truth for HTML/CSS). |
 | `figma-screenshot` | `/figma-screenshot <ticket-or-slug> <figma-url>` | Fetch a Figma node PNG via the figma MCP → save it beside the spec as audit-trail evidence. |
-| `figma-validate` | `/figma-validate <ticket-or-slug>` | Drive a browser MCP to render authored content at each breakpoint, compare against the spec + Figma screenshots, spot-check computed styles, run lint/tests, emit PASS/FAIL. |
+| `figma-validate` | `/figma-validate <ticket-or-slug>` | Drive a browser MCP to render authored content at each breakpoint, compare against the spec + Figma screenshots, spot-check computed styles, run axe-core, a keyboard pass and a CLS trace, run lint/tests, emit PASS/FAIL and log the run. |
 
 The skills produce the **spec** and the **check**. Writing the actual block code from `design.md` is your step — see [docs/workflow.md](docs/workflow.md).
 
 ### The verdict is decided by code, not by the model
 
 `figma-validate` gathers evidence — computed styles at each breakpoint, token
-resolutions, console and network state, lint and test exit codes — writes it to
-`validation/evidence.json`, and then runs a tested core over it:
+resolutions, console and network state, axe-core results scoped to the block, a
+keyboard pass, a lab CLS (Cumulative Layout Shift) trace, lint and test exit
+codes — writes it to `validation/evidence.json`, and then runs a tested core over
+it:
 
 ```bash
 node skills/figma-validate/lib/cli.mjs <spec-dir>/validation/evidence.json
@@ -35,18 +37,33 @@ node skills/figma-validate/lib/cli.mjs <spec-dir>/validation/evidence.json
 no dependencies, typed via JSDoc and covered by `npm test`.
 
 The third exit code is the point: **a gate that cannot evaluate its input must
-not report a result.** No viewports captured or a malformed evidence file exits
-2 rather than emitting a verdict nobody earned.
+not report a result.** No viewports captured, a malformed evidence file, or no
+record of the runtime checks exits 2 rather than emitting a verdict nobody
+earned. The same principle runs through the accessibility rules: axe failing to
+load is a FAIL, never "zero violations".
 
-The one judgement left is the visual diff against the Figma reference, and it is
-labelled as a judgement. See [docs/TESTING.md](docs/TESTING.md) for what is
-tested, what is deliberately not, and why — including how you would measure
-whether the gate is *accurate* rather than merely implemented, which is a
-different question and the more interesting one.
+### Measuring the gate, not just running it
+
+After each verdict, `lib/runlog.mjs` appends one row to an append-only log,
+derived from `evidence.json` by the same code that decided the verdict.
+Reviewers add `false-pass` and `false-fail` corrections later, and `report`
+prints the two rates that measure the control — false passes over **passes**,
+false fails over **fails**:
 
 ```bash
-npm test            # verdict core · hooks · skill contracts · presentation data · docs vs diagram
-npm run typecheck   # JSDoc types via checkJs — no build step, no emitted output
+node skills/figma-validate/lib/runlog.mjs report --log=.figma-validate/runs.jsonl
+```
+
+The one judgement left is the visual diff against the Figma reference, and it is
+labelled as a judgement. See [docs/TESTING.md](docs/TESTING.md) for how the
+suite is built and why — and for how the run log measures whether the gate is
+*accurate* rather than merely implemented, which is a different question and the
+more interesting one.
+
+```bash
+npm test               # verdict core · run log · hooks · skill contracts · presentation data · docs vs diagram
+npm run test:coverage  # the same, with line/branch coverage for skills/**/lib and hooks (reported, not gated)
+npm run typecheck      # JSDoc types via checkJs — no build step, no emitted output
 ```
 
 ---
@@ -76,7 +93,7 @@ scripts only translate them into exit codes and JSON. And the Stop hook
 tampered or stale report is caught by recomputation, not by comparison with
 another claim.
 
-Limits worth knowing: the hooks check files, not browser state, so the dev
+Scope: the hooks check files, not browser state, so the dev
 server, browser MCP and content store stay with the skill's fail-stop rules. They
 are project-level settings, not SKILL.md frontmatter, because frontmatter hooks
 register only after the skill has run and a frontmatter `Stop` hook is converted
@@ -93,7 +110,7 @@ These five practices are encoded in the skills and transfer to any CSS project:
 - **Mobile-first CSS file order** — base rules first, then ascending `@media (width >= …)` blocks in a single ladder per component. Never scatter the same selector above and below a media query boundary.
 - **Dynamic-content dimension rule** — never invent `width` or `max-width` on content-sized elements. Store only what Figma explicitly provides for that node; omit when unsure.
 - **Token-gap validation** — after extracting the spec, cross-reference every `var(--…)` token used against the design-system token files. Flag gaps rather than inventing values in block CSS.
-- **PASS/FAIL browser validation** — computed-style spot-checks against the Layout Matrix, model-driven visual diff against Figma screenshots, plus lint and test gates. A binary verdict keeps the review conversation short.
+- **PASS/FAIL browser validation** — computed-style spot-checks against the Layout Matrix, model-driven visual diff against Figma screenshots, axe-core and a keyboard pass scoped to the block, a CLS gate, plus lint and test gates. A binary verdict keeps the review conversation short.
 
 ---
 
@@ -120,8 +137,14 @@ The methodology on top transfers to other CSS projects by editing the `component
    └── skills/
        ├── figma-specify/SKILL.md
        ├── figma-screenshot/SKILL.md
-       └── figma-validate/SKILL.md
+       └── figma-validate/
+           ├── SKILL.md
+           ├── lib/      verdict core, comparison, schema checks, hook logic, run log
+           └── hooks/    four hook scripts + settings.snippet.json
    ```
+
+   Copy `figma-validate` as a whole directory: the skill runs `lib/cli.mjs` and
+   `lib/runlog.mjs`, and the hooks import from `lib/`.
 
 2. Copy the config template to your project root and fill it in. Run these from the root of a clone of this repo:
 
@@ -137,6 +160,14 @@ The methodology on top transfers to other CSS projects by editing the `component
    `.claude/skills/figma-validate/hooks/settings.snippet.json` into your project's
    `.claude/settings.json`. The scripts travel with the `figma-validate` directory
    you already copied; the snippet assumes that location.
+
+5. Add the run log to your project's `.gitignore` — its rows carry ticket IDs:
+
+   ```bash
+   echo '.figma-validate/' >> <your-project>/.gitignore
+   ```
+
+   (Use your `run_log_path` from the config if you changed the default.)
 
 ---
 
@@ -154,6 +185,7 @@ The methodology on top transfers to other CSS projects by editing the `component
 
 /figma-validate <ticket-or-slug>
     → browser-*.png · snapshot-*.json
+    → axe-*.json          axe-core scoped to the block, plus keyboard pass and CLS trace
     → evidence.json       everything gathered, before anything is decided
     → node lib/cli.mjs evidence.json
     → report.md           the verdict and a remediation checklist
@@ -172,7 +204,8 @@ Full prerequisites, exact invocations, and fail-stop behaviour are documented in
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | skill runner | Required. |
 | Node.js 18+ | runs the verdict core and the hooks | Required for `figma-validate` — it shells out to `lib/cli.mjs`. No packages to install: the modules are dependency-free ESM. If `node` is not on PATH the skill fail-stops rather than adjudicating the checks by hand. |
 | Figma MCP | `mcp.figma` in config | Required. Used by `figma-specify` and `figma-screenshot`. |
-| Browser MCP | `mcp.browser` in config | Required for `figma-validate` (e.g. `chrome-devtools` MCP). |
+| Browser MCP | `mcp.browser` in config | Required for `figma-validate` (e.g. `chrome-devtools` MCP). The performance trace and the Lighthouse score need a browser MCP that offers them; without one, set `runtime_checks.performance: false` and the check is recorded as skipped. |
+| axe-core | loaded into the page under test | Not a pack dependency. Served from your project's `node_modules/axe-core` if your dev server exposes it, otherwise a jsDelivr copy pinned by `axe_core_version`. If neither loads, the run fails rather than reporting zero violations. |
 | Ticket-tracker MCP | `mcp.ticket_tracker` in config | Optional. If absent, pass a Figma URL directly to `/figma-specify`. |
 | Headless-CMS / content-store MCP | `mcp.content_store` in config | Optional. If absent, author and serve your own test content before running `/figma-validate`. |
 

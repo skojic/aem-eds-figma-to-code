@@ -84,15 +84,30 @@ aem-eds-figma-to-code/
 │   ├── figma-screenshot/SKILL.md
 │   └── figma-validate/
 │       ├── SKILL.md
-│       └── lib/                                 # ships WITH the skill — copied in as one directory
-│           ├── compare.mjs                      # normalise + compare one CSS property
-│           ├── verdict.mjs                      # the PASS/FAIL rules, executed not interpreted
-│           └── cli.mjs                          # exit 0 PASS · 1 FAIL · 2 could not evaluate
+│       ├── lib/                                 # ships WITH the skill — copied in as one directory
+│       │   ├── compare.mjs                      # normalise + compare one CSS property
+│       │   ├── verdict.mjs                      # the PASS/FAIL rules, executed not interpreted
+│       │   ├── cli.mjs                          # exit 0 PASS · 1 FAIL · 2 could not evaluate
+│       │   ├── schema.mjs                       # shape checks for design.matrix.json and evidence.json
+│       │   ├── guards.mjs                       # the decision logic behind the four hooks
+│       │   └── runlog.mjs                       # append-only run log (addendum 2026-10-09)
+│       └── hooks/                               # addendum 2026-10-01 — wired via settings.snippet.json
+│           ├── preflight.mjs                    # UserPromptExpansion
+│           ├── artifact-check.mjs               # PostToolUse
+│           ├── report-guard.mjs                 # PreToolUse
+│           ├── verdict-stop.mjs                 # Stop
+│           ├── stdin.mjs                        # shared payload reader
+│           └── settings.snippet.json            # merge into .claude/settings.json
 └── test/                                        # repo infrastructure — NOT copied into a project
+    ├── helpers/project.mjs                      # shared fixtures and a throwaway project dir
     ├── compare.test.mjs
     ├── verdict.test.mjs
+    ├── schema.test.mjs
+    ├── guards.test.mjs
+    ├── hooks.test.mjs                           # spawns the real hook scripts with Claude Code payloads
+    ├── runlog.test.mjs                          # run-log arithmetic: false passes ÷ passes
     ├── skill-contracts.test.mjs                 # guards disable-model-invocation across all skills
-    ├── presentation-data.test.mjs               # referential integrity of agentic-workflow/data.js
+    ├── presentation-data.test.mjs               # agentic-workflow/data.js integrity; tree = skills/ exactly
     └── docs-board-flow.test.mjs                 # docs/workflow.md lane prose vs the DIAGRAM order
 ```
 
@@ -108,8 +123,11 @@ drafts/specs/{ticket}/
 └── validation/                     # /figma-validate
     ├── browser-{viewport}.png
     ├── snapshot-{viewport}.json
+    ├── axe-{viewport}[-{theme}].json   # raw axe-core result, scoped to the block
     ├── evidence.json               # everything gathered, BEFORE any verdict exists
     └── report.md                   # the verdict and remediation checklist
+
+.figma-validate/runs.jsonl          # run_log_path — one row per run, gitignored
 ```
 
 The ordering inside `validation/` is the design: gather, write it all down, then adjudicate. `evidence.json` is what makes a run reproducible and what you read when one fails.
@@ -185,11 +203,11 @@ annotations checked by `tsc --noEmit`, and the shipped files stay plain ESM that
 directly. The install model in §5 is unchanged — copy `skills/*` and one config file. The
 presentation remains dependency-free **at runtime**, which is the property that mattered.
 
-**New non-goal:** end-to-end tests of the loop. "Figma frame → correct CSS" needs Figma and a
-browser; the core is testable because it takes gathered evidence as input. Reasoning in
-`docs/TESTING.md`.
+**What the suite covers:** the logic that decides — comparison, verdict, schema and guards. Figma
+and the browser are driven through MCP at run time, and the core takes their output as evidence.
+Reasoning in `docs/TESTING.md`.
 
-### Future work — the run log
+### Future work — the run log *(done 2026-10-09; see the addendum below)*
 
 `figma-validate` writes a per-ticket `report.md` and nothing cumulative, so nothing in the pack
 shows whether the gate is *accurate* rather than merely implemented. The remaining piece is an
@@ -201,10 +219,7 @@ checks, and the two error rates that actually measure the control.
 passes and false fails need different denominators and why the false-pass figure is a floor rather
 than an estimate. **Deliberately no dependencies when it lands** — a flat file, not a database.
 The pack's install model is copy three directories and one config file, and a database dependency
-would mean the reference implementation could not be stood up without one.
-
-**It ships without numbers.** A reference implementation has no production runs to count, and
-publishing an empty dashboard would repeat the defect this addendum exists to correct.
+would mean the pack could not be installed without one.
 
 ---
 
@@ -221,3 +236,43 @@ publishing an empty dashboard would repeat the defect this addendum exists to co
 **Fail-open points.** If `node` is missing the pre-flight blocks, but the other three would be a non-blocking error; validation cannot run without node anyway. If the `UserPromptExpansion` payload carries no recognisable ticket, pre-flight allows with a warning rather than blocking on a shape it cannot read.
 
 **Deliberately not built.** Auto-running `/figma-validate` after edits (slow, races the gate); block-CSS lint on edit; a spec-freeze prompt; an audit log. Each is plausible, none closes a gap the gate has today.
+
+---
+
+## Addendum — 2026-10-09: runtime checks and the run log
+
+Ported from the originating project's local improvements, where they had been running as prose in
+its copy of `figma-validate`.
+
+**Decision 1 — runtime accessibility and performance are rules in the core, not prose.** The
+originating skill told the model to fail on axe violations, a failed keyboard pass or CLS over 0.1.
+Here those are rule 4 in `verdict.mjs`, read from a new required `runtime` section of
+`evidence.json`, and the hooks enforce them without changes because they already call `evaluate()`.
+Copying them as prose would have reopened exactly the gap the 2026-09-30 addendum closed.
+
+- **Gating:** any axe-core violation inside the block; axe failing to load or finding no block; any
+  keyboard failure (order, visible focus, trap); CLS above `CLS_THRESHOLD` (0.1) unless attributed
+  outside the block; a lazy-loaded first-section image.
+- **Informational only:** LCP, the Lighthouse accessibility score, axe `incomplete` items. Lab
+  timings on a local server are not field data, Lighthouse cannot be scoped to one block, and
+  `incomplete` means axe could not decide.
+- **Missing runtime evidence is unevaluable (exit 2), not a pass.** A project whose browser MCP
+  cannot trace sets `runtime_checks.performance: false` and the skill records `skipped`, which the
+  report shows as *not measured*. The alternative — treating an absent record as skipped — would
+  have kept older evidence files valid, and was rejected because it lets an omission pass silently.
+- **axe-core is not a dependency of the pack.** The skill injects it into the page under test, from
+  the consuming project's `node_modules` if served, else a CDN copy pinned by `axe_core_version`.
+  The pack's install model is unchanged.
+
+**Decision 2 — the run log lands as `lib/runlog.mjs`.** It implements the "Future work" above.
+Three differences from the originating version: rows are derived from `evidence.json` through
+`evaluate()` rather than typed as CLI flags; `CLS_THRESHOLD` is imported, not duplicated; and the
+report text is written for any team reading it. The log path is config
+(`run_log_path`) and belongs in the consuming project's `.gitignore`.
+
+**Decision 3 — coverage is reported in CI, not gated.** `@vitest/coverage-v8` and `vitest` are both
+pinned to 3.2.7, because the plugin declares an exact peer version. Dev-only, like the rest of
+`package.json`.
+
+**Not ported.** The originating project's agent-pipeline instruction changes (out of scope by §1),
+its tests for its own application code, and its SonarCloud upload.

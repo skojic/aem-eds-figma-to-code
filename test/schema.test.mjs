@@ -77,3 +77,39 @@ describe('validateEvidence', () => {
     expect(validateEvidence(e).join()).toMatch(/consoleErrors/);
   });
 });
+
+describe('validateEvidence — runtime section', () => {
+  it('rejects evidence with no runtime record at all', () => {
+    const e = clone(PASSING_EVIDENCE);
+    delete e.runtime;
+    expect(validateEvidence(e).join()).toMatch(/runtime is missing/);
+  });
+
+  it('accepts every check marked skipped', () => {
+    const e = clone(PASSING_EVIDENCE);
+    e.runtime = { axe: { status: 'skipped' }, keyboard: { status: 'skipped' }, performance: { status: 'skipped' } };
+    expect(validateEvidence(e)).toEqual([]);
+  });
+
+  it('reports every runtime problem in one pass', () => {
+    const e = clone(PASSING_EVIDENCE);
+    e.runtime = {
+      axe: { status: 'ran', runs: [{ viewport: '', violations: [{}] }] },
+      keyboard: { status: 'ran', reachedInOrder: true },
+      performance: { status: 'ran', cls: -1, clsInsideBlock: 'yes' },
+    };
+    const problems = validateEvidence(e).join('\n');
+    expect(problems).toMatch(/axe\.runs\[0\]\.viewport/);
+    expect(problems).toMatch(/violations\[0\] needs a string id/);
+    expect(problems).toMatch(/keyboard\.visibleFocus/);
+    expect(problems).toMatch(/keyboard\.noTrap/);
+    expect(problems).toMatch(/performance\.cls/);
+    expect(problems).toMatch(/clsInsideBlock/);
+  });
+
+  it('rejects an unknown axe status', () => {
+    const e = clone(PASSING_EVIDENCE);
+    e.runtime = { ...e.runtime, axe: { status: 'probably-fine' } };
+    expect(validateEvidence(e).join()).toMatch(/runtime\.axe\.status/);
+  });
+});

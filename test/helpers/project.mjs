@@ -2,6 +2,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+/** Every runtime check ran and found nothing. */
+export const RUNTIME_OK = {
+  axe: { status: 'ran', runs: [{ viewport: 'mobile', violations: [], incomplete: 0 }, { viewport: 'desktop', violations: [], incomplete: 0 }] },
+  keyboard: { status: 'ran', reachedInOrder: true, visibleFocus: true, noTrap: true },
+  performance: { status: 'ran', cls: 0.02, clsInsideBlock: null, lcpMs: 1800, firstSectionImageLazy: false },
+  lighthouse: { mobile: 0.96, desktop: 0.98 },
+};
+
 export const PASSING_EVIDENCE = {
   block: 'teaser',
   viewports: [{
@@ -9,6 +17,7 @@ export const PASSING_EVIDENCE = {
     rows: [{ container: '.teaser-inner', results: [{ prop: 'gap', match: true, severity: null, reason: null }] }],
   }],
   gates: { lint: 'pass', test: 'skipped' },
+  runtime: RUNTIME_OK,
 };
 
 export const FAILING_EVIDENCE = {
@@ -17,6 +26,16 @@ export const FAILING_EVIDENCE = {
     name: 'desktop',
     rows: [{ container: '.teaser-inner', results: [{ prop: 'gap', match: false, severity: 'blocker', reason: 'expected 32px, computed 8px' }] }],
   }],
+  runtime: RUNTIME_OK,
+};
+
+/** Layout is fine; one axe violation inside the block. */
+export const AXE_FAILING_EVIDENCE = {
+  ...PASSING_EVIDENCE,
+  runtime: {
+    ...RUNTIME_OK,
+    axe: { status: 'ran', runs: [{ viewport: 'desktop', violations: [{ id: 'color-contrast', impact: 'serious', nodes: ['.teaser-cta'] }] }] },
+  },
 };
 
 export const MATRIX = {

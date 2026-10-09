@@ -217,6 +217,9 @@ describe('the file tree covers what the skills actually write', () => {
     'figma-',
     'browser-',
     'snapshot-',
+    'axe-',
+    'runlog.mjs',
+    'runs.jsonl',
     'preflight.mjs',
     'artifact-check.mjs',
     'report-guard.mjs',
@@ -250,7 +253,27 @@ describe('the file tree covers what the skills actually write', () => {
     const shown = FILES
       .map((f) => f.path)
       .filter((path) => path.startsWith('.claude/skills/figma-validate/hooks/'))
-      .map((path) => path.split('/').pop())
+      .map((path) => /** @type {string} */ (path.split('/').pop()))
+      .filter((name) => name.endsWith('.mjs') && name !== 'stdin.mjs')
+      .sort();
+    expect(shown).toEqual(shipped);
+  });
+
+  it('shows every file the pack ships, and no pack file that does not exist', () => {
+    // The install step is "copy skills/* into .claude/skills/", so the tree's
+    // .claude/skills/ subtree must be exactly skills/ — lib modules, hook
+    // helpers and the settings snippet included. This is the check that
+    // caught five lib/ modules, stdin.mjs and settings.snippet.json missing.
+    const walk = (dir, prefix = '') => readdirSync(new URL(dir, import.meta.url), { withFileTypes: true })
+      .filter((e) => e.name !== '.DS_Store')
+      .flatMap((e) => (e.isDirectory()
+        ? walk(`${dir}${e.name}/`, `${prefix}${e.name}/`)
+        : [`${prefix}${e.name}`]));
+    const shipped = walk('../skills/').sort();
+    const shown = FILES
+      .map((f) => f.path)
+      .filter((p) => p.startsWith('.claude/skills/'))
+      .map((p) => p.slice('.claude/skills/'.length))
       .sort();
     expect(shown).toEqual(shipped);
   });

@@ -7,13 +7,15 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text-summary --coverage.reporter=text --coverage.include=skills/**/lib/** --coverage.include=skills/**/hooks/**",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.6.3",
+    "@vitest/coverage-v8": "3.2.7",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "3.2.7"
   },
   "comment": "Dev dependencies only. The skill pack itself is copy-paste Markdown plus dependency-free ESM, and agentic-workflow/ stays dependency-free at runtime — see docs/DESIGN.md."
 }

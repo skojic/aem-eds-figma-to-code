@@ -36,6 +36,16 @@ breakpoints:                    # name + min-width; drives spec ladders AND vali
 # --- Commands ---
 lint_cmd: "npm run lint"        # empty = skip lint gate.
 test_cmd: "npm test"            # empty = skip test gate.
+
+# --- Runtime checks (figma-validate Steps 5b/5c) ---
+runtime_checks:                 # false = record the check as "skipped" (not measured, never passed).
+  axe: true                     # axe-core scoped to the block — any violation fails.
+  keyboard: true                # Tab order, visible focus, no trap — any failure fails.
+  performance: true             # lab trace — block-caused CLS > 0.1 fails; LCP informational.
+axe_core_version: "4.14.0"      # pins the CDN fallback; match your axe-core devDependency if you have one.
+
+# --- Run log (figma-validate Step 8) ---
+run_log_path: ".figma-validate/runs.jsonl"   # append-only; rows carry ticket IDs — add to .gitignore.
 ```
 
 ## token_layer_model

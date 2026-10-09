@@ -26,6 +26,11 @@ minor delta fails only at two or more viewports looks like laxity in isolation.
 It is a considered choice about rounding artefacts versus systematic offsets,
 and `verdict.test.mjs` says so.
 
+`CLS_THRESHOLD` is pinned the same way, at the literal `0.1`, with boundary
+tests at exactly `0.1` (passes) and `0.11` (fails). `runlog.mjs` imports the
+constant rather than restating it, so the run log's "over threshold" count and
+the gate cannot disagree about where the line is.
+
 **A corollary that cost us a real test.** The boundary cases in
 `compare.test.mjs` were originally written *relative* to `MINOR_PX_TOLERANCE`
 — `expected 32px, computed ${32 + MINOR_PX_TOLERANCE}px`. That reads well and
@@ -52,6 +57,12 @@ validating against an unreadable spec is worse than stopping. An unparseable
 **computed** value fails as a blocker, because the gate could not verify the
 property, and *could not verify* must never resolve to a match. The invariant
 is that neither path can produce `match: true`.
+
+The runtime checks follow the same rule. axe that did not load, or loaded and
+found no block, is a blocker — never "zero violations". A runtime check with no
+recorded status throws, exactly like an empty viewport list, so the gate exits
+2. `verdict.test.mjs` asserts both, plus that a check the config turned off
+reports as *not measured, not passed* rather than disappearing.
 
 `skill-contracts.test.mjs` is an invariant over the pack itself: every skill
 declares `disable-model-invocation: true`. "Nothing self-triggers" is the
@@ -103,6 +114,9 @@ So each one was verified by breaking its target and confirming the failure:
 - a `FILES[].node` in `data.js` pointed at an id that does not exist
 - `evidence.json` renamed out of the `FILES` tree
 - two lane-3 `DIAGRAM` nodes swapped, with `docs/workflow.md` left untouched
+- `CLS_THRESHOLD` 0.1 → 0.5
+- axe `not_loaded` treated as a clean run instead of a blocker
+- the run log's false-pass denominator changed from passes to all runs
 
 Every one failed as intended, by name, and was restored. **Do this before
 calling a suite done.** It is fast, and it is the only step that distinguishes a
@@ -137,17 +151,33 @@ Payloads are built from the shapes the Claude Code hooks reference documents, so
 the scripts are exercised the way the harness calls them: JSON on stdin, a decision
 on stdout or an exit code.
 
+The runtime rules needed no hook changes — the guards call `evaluate()` and
+`validateEvidence()`, so a new rule there is enforced everywhere at once.
+`hooks.test.mjs` pins that rather than assuming it: a PASS over evidence whose
+only failure is an axe violation is denied, and any report over evidence with no
+runtime record is denied as unevaluable.
+
+## Coverage
+
+`npm run test:coverage` prints line and branch coverage for the shipped modules
+(`skills/**/lib`, `skills/**/hooks`) and CI runs it. It is **reported, not
+gated**. A percentage threshold rewards tests written for the number; the check
+that matters here is mutation-verification (rule 3).
+
+One figure needs reading carefully: the hook scripts and `lib/cli.mjs` show 0%.
+The hooks are exercised — `hooks.test.mjs` spawns them as real processes — but
+V8 coverage is collected in the test process and does not follow a child
+process, so the 0% is a limit of the measurement rather than proof of an untested
+file. The logic those scripts call lives in `guards.mjs`, `schema.mjs` and
+`verdict.mjs`, which are covered directly. `cli.mjs` is thin, but it is the one
+file in `lib/` with no direct test of its own.
+
 ## Measuring the gate itself
 
 Everything above answers *are the rules implemented correctly?* It does not
 answer *are the rules right?* A suite can be green while the gate passes work it
-should have stopped. Only field data settles that, and this section is the
-method rather than the results.
-
-**No numbers are published here, because this repo has no production runs.** A
-reference implementation has no users to measure. Stating the method without
-data is honest; printing a dashboard with nothing in it would be the same defect
-as the test badge this repo used to carry for a suite that did not exist.
+should have stopped. The run log answers that second question, from the runs
+themselves.
 
 The two numbers worth collecting are error rates in **opposite directions**, and
 they are not symmetric:
@@ -174,17 +204,25 @@ Three details decide whether the numbers mean anything:
    review happens to notice. The figure is therefore a floor, not an estimate,
    and should be quoted that way.
 
-A log for this is append-only, one row per run, with corrections as new rows
-referencing an earlier run rather than edits to it — a log that can be rewritten
-is a log whose totals cannot be quoted. Schema and queries are the remaining
-work; see the run log under future work in [DESIGN.md](DESIGN.md).
+The log is `skills/figma-validate/lib/runlog.mjs`: append-only JSONL, one row per
+run, with corrections as new rows referencing a ticket rather than edits to an
+earlier one — a log that can be rewritten is a log whose totals cannot be quoted.
+A run row is **derived from `evidence.json` through `evaluate()`**, so the verdict
+and measurements in the log are the gate's own, and evidence the gate cannot
+evaluate is refused rather than logged. A check that was not measured is left
+out of the row, never written as 0.
 
-## What is deliberately not tested
+`runlog.test.mjs` pins all three details above, the first one hardest: with 2
+passes, 4 fails and 1 false pass the rate must read 50%, not the 17% a total-runs
+denominator would give. The arithmetic is the part most likely to be quoted and
+least likely to crash when wrong.
 
-**The pipeline end to end.** "Figma frame → correct CSS" cannot be unit-tested
-without Figma and a browser. The verdict core is testable precisely because it
-takes gathered evidence as its input; a suite claiming to cover the whole loop
-would be theatre.
+## What the suite leaves to the run
+
+**Figma and the browser.** At run time the skills drive Figma, the browser and
+the authored page through the MCP servers named in the config. The suite covers
+what decides the outcome: the verdict core takes the gathered evidence as its
+input, which is exactly what makes it testable on its own.
 
 **The visual diff.** It is a model judgement, labelled as one in
 `figma-validate/SKILL.md` and in the presentation. Replacing it with a

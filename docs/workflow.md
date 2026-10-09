@@ -24,9 +24,11 @@ This document describes the end-to-end loop these three skills support and expla
 
 /figma-validate <ticket-or-slug>                 ← gather evidence, then let code decide
     → browser-<viewport>.png · snapshot-<viewport>.json
+    → axe-<viewport>.json    (axe-core scoped to the block) · keyboard pass · CLS trace
     → evidence.json          (everything gathered, before anything is decided)
     → node lib/cli.mjs evidence.json → exit 0 PASS · 1 FAIL · 2 could not evaluate
     → report.md              (the verdict and a remediation checklist)
+    → node lib/runlog.mjs run …  (one row in the run log, for measuring the gate itself)
 ```
 
 The skills produce the **spec** (`design.md`) and the **check** (PASS/FAIL report). They do not write block JavaScript or CSS — that is the implementation step between screenshot capture and validation.
@@ -45,9 +47,10 @@ extraction → **`design.md` + `design.matrix.json` written** → matrix check h
 
 **02 Capture & build** — `/figma-screenshot` → `figma-*.png` saved → **your implementation step**.
 
-**03 Validate** — preflight hook → pre-flight fail-stops → content store → browser breakpoint loop → visual diff →
-computed-style comparison → **`evidence.json` written** → evidence check hook → `node lib/cli.mjs` →
-report guard hook → stop gate hook → PASS / FAIL, with the
+**03 Validate** — preflight hook → pre-flight fail-stops → content store → browser breakpoint loop
+(and per theme) → visual diff → computed-style comparison → accessibility pass (axe-core + keyboard) →
+performance trace → lint and tests → **`evidence.json` written** → evidence check hook →
+`node lib/cli.mjs` → report guard hook → PASS / FAIL → run log appended → stop gate hook, with the
 FAIL branch looping back into phase 02.
 
 The two emphasised nodes are the ones worth reading the order around. Lane 01 produces both the
@@ -62,7 +65,44 @@ at `extended`. Hooks never decide a verdict — they make sure the gate ran and 
 
 **Two nodes are hidden by default.** The computed-style comparison sits under *Subagents* at
 `extended`, and the `node lib/cli.mjs` gate under *Gates* at `base`. If lane 03 looks like it goes
-straight from the browser loop to a verdict, turn Subagents up to `extended`.
+straight from the browser loop to a verdict, turn Subagents up to `extended`. The performance trace
+sits under *MCP* at `extended`; the accessibility pass shows at `base`, and so does the lint and
+tests gate under *Gates*.
+
+The stop gate is the last node in the lane because the `Stop` hook fires when the session tries to
+end — after the report and the run-log row are written.
+
+### Lane 03 in one picture
+
+The same lane, with the two feedback paths drawn in: a FAIL goes back to your implementation step,
+and a reviewer who later disagrees with the gate records a correction in the run log.
+
+```mermaid
+flowchart LR
+  subgraph gather["Gather — the skill"]
+    direction TB
+    B["Browser loop<br/>per breakpoint and theme<br/>screenshots · computed styles<br/>console · network"]
+    A["Accessibility pass<br/>axe-core in the block<br/>keyboard: order · focus · trap"]
+    P["Performance trace<br/>CLS · LCP (info)"]
+    D["Visual diff<br/>the one model judgement"]
+    T["Lint + tests<br/>lint_cmd · test_cmd"]
+  end
+  B --> E[("evidence.json<br/>written before any verdict")]
+  A --> E
+  P --> E
+  D --> E
+  T --> E
+  E --> V{"node lib/cli.mjs<br/>tested code decides"}
+  V -- "exit 0 PASS" --> R["report.md"]
+  V -- "exit 1 FAIL" --> R
+  V -- "exit 2 could not evaluate" --> S["Fail-stop<br/>no report, nothing logged"]
+  R --> L[("run log<br/>one row per run")]
+  L --> H["Stop gate hook<br/>session ends only when<br/>report.md matches the gate"]
+  R -. "FAIL" .-> I["Your implementation step"]
+  I -.-> B
+  Rev["Later review"] -. "false-pass / false-fail" .-> L
+  L --> M["runlog.mjs report<br/>false passes ÷ passes<br/>false fails ÷ fails"]
+```
 
 ---
 
@@ -75,6 +115,8 @@ Before running any skill, confirm:
 - [ ] For `/figma-validate`: `node` is on PATH — it runs the verdict core in `skills/figma-validate/lib/`. Nothing to install; those modules are dependency-free ESM.
 - [ ] For `/figma-validate`: the browser MCP (configured as `mcp.browser`) is connected.
 - [ ] For `/figma-validate`: your local dev server is running (or can be started by the skill).
+- [ ] For `/figma-validate` with `runtime_checks.axe` on: the page can load axe-core — either your dev server serves `/node_modules/axe-core/axe.min.js` or the page may fetch the pinned jsDelivr copy. If neither loads, the gate fails the run rather than reporting zero violations.
+- [ ] `run_log_path` (default `.figma-validate/runs.jsonl`) is in your project's `.gitignore` — rows carry ticket IDs.
 - [ ] If you use a ticket-tracker MCP (`mcp.ticket_tracker`), the ticket has been fetched before calling `/figma-specify`.
 - [ ] If you use a content-store MCP (`mcp.content_store`), the MCP is connected before calling `/figma-validate`.
 
@@ -215,7 +257,7 @@ The skills have no involvement in this step.
 
 **What it does:**
 
-Drives the browser MCP to render the authored test content at each configured breakpoint. Compares browser screenshots against the Figma reference PNGs, spot-checks computed styles from `design.matrix.json` via `evaluate_script`, resolves token values, surfaces console errors and failed network requests, and runs lint and tests.
+Drives the browser MCP to render the authored test content at each configured breakpoint. Compares browser screenshots against the Figma reference PNGs, spot-checks computed styles from `design.matrix.json` via `evaluate_script`, resolves token values, surfaces console errors and failed network requests, runs axe-core and a keyboard pass against the block, records a lab performance trace, and runs lint and tests.
 
 It then writes everything it observed to `evidence.json` and **runs a tested module over that file to reach the verdict**. The skill gathers; code decides.
 
@@ -240,8 +282,10 @@ The comparison itself goes through `lib/compare.mjs`, which normalises before co
 **Outputs:**
 - `{spec_dir}/validation/browser-<viewport>.png` — one screenshot per breakpoint
 - `{spec_dir}/validation/snapshot-<viewport>.json` — DOM + a11y tree
-- `{spec_dir}/validation/evidence.json` — every comparison, token resolution, console and network count, visual-delta severity and gate status, written **before** the verdict exists
+- `{spec_dir}/validation/axe-<viewport>[-<theme>].json` — the raw axe-core result, scoped to the block
+- `{spec_dir}/validation/evidence.json` — every comparison, token resolution, console and network count, visual-delta severity, gate status and runtime result, written **before** the verdict exists
 - `{spec_dir}/validation/report.md` — the verdict, what blocked it, what was recorded without blocking, and a remediation checklist
+- one appended row in `run_log_path` — see [The run log](#the-run-log) below
 
 The evidence file is what makes a run reproducible: re-running the verdict over the same evidence cannot produce a different answer, because no gathering happens during adjudication. It is also what you read when a run fails, instead of re-deriving why a model said what it said.
 
@@ -251,6 +295,11 @@ The evidence file is what makes a run reproducible: re-running the verdict over 
 - Every Design Token Mapping entry resolving to the expected value
 - No console errors or failed network requests for block assets
 - `lint_cmd` and `test_cmd` exiting 0, **or skipped** when the config value is empty. An empty command reports `skipped`, never `pass`
+- axe-core loaded, found the block, and reported **zero violations** inside it at every viewport and theme tested
+- A clean keyboard pass: every focusable block element reached in order, each with a visible focus change, and no focus trap
+- CLS (Cumulative Layout Shift — how much content jumps while loading) **≤ 0.1**, unless the trace attributes the shift outside the block; no lazy-loaded image in a block authored as the first section
+
+Each runtime check can be turned off in `runtime_checks`. A check turned off is recorded as `skipped` — *not measured*, never passed — and a check with no recorded status at all makes the gate exit `2`. **LCP (Largest Contentful Paint), the Lighthouse score and axe `incomplete` items never decide the verdict**: lab timings on a local server are not field data, Lighthouse cannot be scoped to one block, and `incomplete` means axe could not decide.
 
 **Minor deltas** — spacing within 2px — are recorded and do not fail on their own. They fail when **the same container and the same property** drift at **two or more viewports**, because that is a systematic offset rather than a rounding artefact. Drift on different properties, or different containers, does not aggregate.
 
@@ -260,7 +309,27 @@ An **unverifiable reading also fails rather than passes**: if a computed value i
 
 The thresholds live in `lib/compare.mjs` and `lib/verdict.mjs`, both pinned by tests — see [TESTING.md](TESTING.md) for why they are pinned as literals rather than derived.
 
-**A passing suite does not mean the thresholds are right.** Tests prove the rules are implemented as written; only field data shows whether they are correct — how often the gate passes work review later rejects, and how often it blocks work that was fine. [TESTING.md](TESTING.md) sets out how to measure both and why they need different denominators. No figures are published, because a reference implementation has no production runs to count.
+**A passing suite does not mean the thresholds are right.** Tests prove the rules are implemented as written; only field data shows whether they are correct — how often the gate passes work review later rejects, and how often it blocks work that was fine. The run log below measures both, and [TESTING.md](TESTING.md) sets out why they need different denominators.
+
+### The run log
+
+After the report, the skill appends one row to `run_log_path`:
+
+```
+node lib/runlog.mjs run PROJ-123 --evidence=drafts/specs/PROJ-123/validation/evidence.json --log=.figma-validate/runs.jsonl
+```
+
+The row is **derived from `evidence.json` by `evaluate()`** — the verdict, the first failing check, the axe violation count and the CLS come from the same code that decided the verdict, so nothing is typed by hand. Evidence the gate could not evaluate is refused and nothing is written. A check that was not measured is left out of the row rather than written as `0`, so a run where axe never loaded cannot count as a clean one.
+
+The log is append-only. When review later disagrees with the gate, the reviewer adds a correction:
+
+```
+node lib/runlog.mjs false-pass PROJ-123 "focus ring missing on the secondary CTA"
+node lib/runlog.mjs false-fail PROJ-120 "contrast flagged over a photo; passes by hand"
+node lib/runlog.mjs report
+```
+
+`report` prints run and ticket counts, the pass rate, the most frequent failing checks, axe and CLS figures over the runs that measured them, and the two rates that measure the control: false passes over **passes**, false fails over **fails**. It ends with the caveat that false passes are a floor — one is only recorded when review happens to catch it.
 
 **Fail-stop conditions:**
 - `figma-to-code.config.md` missing → STOP.

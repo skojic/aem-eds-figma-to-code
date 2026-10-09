@@ -1,6 +1,6 @@
 ---
 name: figma-validate
-description: Browser-based visual + behavioural validation for a component. Drives the configured browser MCP to render authored content at each configured breakpoint, compares against the design.md spec and Figma screenshots, spot-checks computed styles vs the Layout Matrix, runs lint + tests, emits PASS/FAIL. Config-driven. Explicit invocation only — use only when the user types "/figma-validate" or "figma-validate <ticket-or-slug>".
+description: Browser-based visual + behavioural validation for a component. Drives the configured browser MCP to render authored content at each configured breakpoint, compares against the design.md spec and Figma screenshots, spot-checks computed styles vs the Layout Matrix, runs axe-core, a keyboard pass and a CLS trace, runs lint + tests, emits PASS/FAIL and logs the run. Config-driven. Explicit invocation only — use only when the user types "/figma-validate" or "figma-validate <ticket-or-slug>".
 disable-model-invocation: true
 ---
 
@@ -14,7 +14,8 @@ Read `figma-to-code.config.md` (root, fallback `.claude/`). If missing, STOP
 and point the user at the template. Bind: `mcp.browser` (REQUIRED — stop if
 empty), `mcp.content_store` (OPTIONAL), `spec_output_path`,
 `content_path_template`, `preview_url_template`, `breakpoints`, `themes`,
-`lint_cmd`, `test_cmd`.
+`lint_cmd`, `test_cmd`, `runtime_checks` (default: all three `true`),
+`axe_core_version`, `run_log_path` (default `.figma-validate/runs.jsonl`).
 
 **Spec dir** — defined once, used everywhere below:
 `spec_output_path` in config is the FULL path to the spec file including the
@@ -40,8 +41,12 @@ resolved directory.
 - Compare against `<spec-dir>/figma-*.png` and the rules in `design.md`
 - Spot-check computed CSS (`flex-direction`, `gap`, resolved token colors, font sizes) against the Layout Matrix, **reading expected values from `<spec-dir>/design.matrix.json`** — the structured sidecar `/figma-specify` writes, not the markdown table
 - Surface console errors and network failures
+- Run axe-core scoped to the block, and a keyboard pass (Step 5b) — both gating
+- Record a page-level Lighthouse accessibility score (Step 5b) — context only, never gating
+- Record a lab performance trace (Step 5c) — block-caused CLS gates; LCP is informational
 - Run `lint_cmd` (config; skip if empty) and `test_cmd` (config; skip if empty)
 - **Write `<spec-dir>/validation/evidence.json` and let `lib/cli.mjs` decide the verdict** — see Step 6b. This skill gathers evidence; it does not adjudicate numeric checks
+- Append one row to the run log with `lib/runlog.mjs` (Step 8), so the gate's own accuracy can be measured later
 
 **NOT in scope** (covered elsewhere):
 - Producing or editing `design.md` (that is `/figma-specify`)
@@ -61,6 +66,7 @@ resolved directory.
    - If the `mcp.content_store` server is unavailable or returns an auth error, **STOP** per the Fail-Stop rule below. Do not silently fall back to asking the user to create the file by hand.
 5. **Dev server running** — start via your project's local dev command. If port not bound, start it (`run_in_background`) and wait for ready.
 6. **`mcp.browser` server available**. If the MCP is not connected, **STOP** per the Fail-Stop rule below — do not substitute.
+7. **axe-core reachable** (only when `runtime_checks.axe` is true) — either the project serves `/node_modules/axe-core/axe.min.js` (axe-core as a devDependency) or the page may load the pinned CDN copy `https://cdn.jsdelivr.net/npm/axe-core@<axe_core_version>/axe.min.js`. You do not need to probe this up front: Step 5b records `not_loaded` if both fail, and the gate fails the run on it.
 
 **Enforced by hooks when installed.** Items 2, 2b and 3 (and the config file)
 are also checked by `hooks/preflight.mjs` before this skill starts,
@@ -167,7 +173,24 @@ For each viewport in the viewports from `breakpoints` (config) (filter to what `
 
 1. `new_page` (or `select_page` if already open) → navigate to the block's local preview URL (`preview_url_template` from config).
 2. `emulate` → set viewport width (heights: mobile 667, tablet 1024, desktop 800, wide 900, xl 900).
-3. `wait_for` block's root selector (`.<block-name>`) to render.
+3. Wait for the block. Browser MCPs commonly match `wait_for` against **text**, not CSS selectors, so do it in two parts:
+   - `wait_for` a string you know is in the authored content — the `V1 — <block-name>` label from Step 1b, or a heading from the content you read. This confirms the page arrived.
+   - Then `evaluate_script` until every instance of the block has finished decorating. With the default EDS `component_model`, `aem.js` sets `data-block-status="loaded"` at the end of block loading; for another component model, substitute its own readiness signal:
+     ```js
+     async () => {
+       const deadline = Date.now() + 15000;
+       const read = () => [...document.querySelectorAll('.<block-name>')];
+       while (Date.now() < deadline) {
+         const blocks = read();
+         if (blocks.length && blocks.every((b) => b.dataset.blockStatus === 'loaded')) {
+           return { ready: true, count: blocks.length };
+         }
+         await new Promise((r) => setTimeout(r, 250));
+       }
+       return { ready: false, statuses: read().map((b) => b.dataset.blockStatus || 'none') };
+     }
+     ```
+     `ready: false` with no statuses means the block never rendered (wrong name or missing content); statuses stuck before `loaded` mean its JS failed or hung. Either is recorded as a blocker visual delta — check the console messages (item 6) for the cause.
 4. `take_snapshot` (DOM + a11y tree) → save to `<spec-dir>/validation/snapshot-<viewport>.json`.
 5. `take_screenshot` → save as `<spec-dir>/validation/browser-<viewport>.png`.
 6. `list_console_messages` → record any errors/warnings.
@@ -208,6 +231,128 @@ For each theme in the themes from `themes` (config); skip theme checks if `theme
 - Switch theme → `take_screenshot` (via the `mcp.browser` server) → `evaluate_script` to confirm theme token overrides resolved correctly
 - Save as `browser-<viewport>-<theme>.png`
 - Compare colour-bound elements (CTAs, headings, backgrounds) against the expected token resolution
+
+## Step 5b: Runtime Accessibility
+
+A static read of the code cannot see the rendered accessibility tree, the
+contrast of the colours that actually resolved, or where focus goes. This step
+can. Every result goes into `evidence.json` under `runtime` (Step 6b); the
+verdict core decides what it means.
+
+If `runtime_checks.axe` is `false`, record `"axe": { "status": "skipped" }`.
+If `runtime_checks.keyboard` is `false`, record `"keyboard": { "status": "skipped" }`.
+A skipped check is reported as *not measured*, never as passed — and leaving a
+check out of the evidence entirely makes the gate exit 2.
+
+### axe-core, scoped to the block (gating)
+
+Run at the smallest and largest viewport you tested, in the default theme, then
+at the largest viewport once per additional theme in `themes` (contrast depends
+on the theme). After the Step 3 wait, call `evaluate_script` with:
+
+```js
+async () => {
+  const sources = [
+    '/node_modules/axe-core/axe.min.js',                                         // if the dev server serves node_modules
+    'https://cdn.jsdelivr.net/npm/axe-core@<axe_core_version>/axe.min.js',       // pinned to the config version
+  ];
+  const load = (src) => new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.append(s);
+  });
+  let loadedFrom = window.axe ? 'already-present' : null;
+  for (const src of sources) {
+    if (window.axe) break;
+    try { await load(src); if (window.axe) loadedFrom = src; } catch (e) { /* try the next source */ }
+  }
+  if (!window.axe) return { loaded: false };
+  // axe.run throws "No elements found for include" when the selector matches nothing.
+  if (!document.querySelector('.<block-name>')) return { loaded: true, blockFound: false };
+  const r = await window.axe.run('.<block-name>', {
+    runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] },
+  });
+  return {
+    loaded: true,
+    loadedFrom,
+    version: window.axe.version,
+    violations: r.violations.map((v) => ({
+      id: v.id, impact: v.impact, help: v.help,
+      nodes: v.nodes.map((n) => n.target.join(' ')),
+    })),
+    incomplete: r.incomplete.map((v) => ({ id: v.id, help: v.help, nodes: v.nodes.length })),
+  };
+}
+```
+
+- Replace `<block-name>` with the block's root class. Scoping to the block keeps header and footer chrome from failing the ticket.
+- `loaded: false` (both sources blocked, e.g. by a Content Security Policy) → record `"status": "not_loaded"`. **Do not record it as zero violations.** The gate fails the run, because an unmeasured check is not a passed check.
+- `blockFound: false` → record `"status": "block_not_found"`; the gate fails the run.
+- Otherwise record `"status": "ran"` and one entry in `runs` per viewport/theme, with `violations` (id, impact, nodes) and `incomplete` as a **count**.
+- `incomplete` items are cases axe could not decide (typically contrast over an image or gradient). The gate lists them for manual review; they do not fail the run.
+- A 404 for `/node_modules/axe-core/axe.min.js` in the network log after this step is the loader probing, not a block failure — Step 3 already captured the block's own console and network state.
+- Save each raw result to `<spec-dir>/validation/axe-<viewport>[-<theme>].json`.
+
+### Keyboard pass (gating)
+
+At the largest viewport, once. Reload first so earlier interaction leaves no focus behind.
+
+1. `evaluate_script` to list the block's focusable elements and record each one's **unfocused** outline and box-shadow as a baseline:
+   ```js
+   () => {
+     const sel = ['a[href]', 'button', 'input', 'select', 'textarea', '[tabindex]:not([tabindex="-1"])']
+       .map((s) => `.<block-name> ${s}`).join(', ');
+     return [...document.querySelectorAll(sel)]
+       .filter((el) => !el.disabled && el.getClientRects().length > 0) // skip hidden/disabled
+       .map((el) => {
+         const cs = getComputedStyle(el);
+         return { tag: el.tagName, text: (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 40),
+           outline: `${cs.outlineStyle} ${cs.outlineWidth}`, boxShadow: cs.boxShadow };
+       });
+   }
+   ```
+2. `evaluate_script` to insert a temporary focus sentinel — a button placed immediately before the block, so the Tab sequence starts just outside it — and focus it. It must return `kbd-start`:
+   `() => { const b = document.createElement('button'); b.id = 'kbd-start'; b.textContent = 'start'; const blk = document.querySelector('.<block-name>'); blk.parentNode.insertBefore(b, blk); b.focus(); return document.activeElement.id; }`
+3. Press `Tab` repeatedly (the `mcp.browser` key-press tool). After each press, `evaluate_script` to read `document.activeElement` — tag, text, whether `closest('.<block-name>')` is non-null — and its computed `outline-style`, `outline-width` and `box-shadow`.
+4. Record three booleans:
+   - `reachedInOrder` — every element from step 1 received focus, in that order.
+   - `visibleFocus` — each one, when focused, showed an indicator (a non-`none` outline wider than 0, or a non-`none` box-shadow) that **differs from its step-1 baseline**.
+   - `noTrap` — one more `Tab` after the last block element moved focus outside the block. Cap the loop at (element count + 5) presses; hitting the cap inside the block is a trap.
+5. Remove the sentinel: `() => document.getElementById('kbd-start')?.remove()`.
+
+A block with no focusable elements records all three as `true`.
+
+### Lighthouse accessibility score (context only, never gating)
+
+If `mcp.browser` exposes a Lighthouse audit (in the `chrome-devtools` MCP it is
+`lighthouse_audit`), run it once with a mobile device and once with desktop and
+record the accessibility category score as `runtime.lighthouse.mobile` /
+`.desktop` (0–1). Lighthouse audits the whole page and cannot be scoped to the
+block, so the score is context: a drop against an earlier run on the same test
+page is worth a note, never a FAIL. Omit `lighthouse` if the tool is not
+available.
+
+## Step 5c: Performance (CLS gates, LCP informational)
+
+If `runtime_checks.performance` is `false`, or `mcp.browser` has no performance
+trace tool, record `"performance": { "status": "skipped" }` and move on.
+
+Lab numbers from a local dev server are not field data. CLS (Cumulative Layout
+Shift — how much visible content jumps while loading) is stable enough locally
+to gate on. LCP (Largest Contentful Paint — when the biggest visible element
+appears) is not: it depends on the proxy, the cache and the machine.
+
+1. Emulate the smallest configured viewport with mobile touch and 4× CPU throttling.
+2. Navigate to the block preview and start a performance trace that reloads the page and stops itself (in the `chrome-devtools` MCP: `performance_start_trace` with `reload: true`, `autoStop: true`).
+3. From the trace summary record CLS and LCP. For any layout-shift insight the summary lists, open it (in `chrome-devtools`: `performance_analyze_insight`) using the insight set id and insight name **exactly as the summary names them** — do not guess names — and decide whether the shifting element is inside `.<block-name>`.
+4. If the block is authored as the first section (the likely LCP element), `evaluate_script` to read whether its first `<img>` has `loading="lazy"`.
+5. Record `"performance": { "status": "ran", "cls": <number>, "clsInsideBlock": true | false | null, "lcpMs": <number>, "firstSectionImageLazy": true | false | null }`. Use `null` for "the trace did not attribute the shift" and for "the block is not the first section".
+6. Reset CPU throttling to 1×.
+
+The gate fails CLS above 0.1 unless the shift is attributed **outside** the
+block (`clsInsideBlock: false`). An unattributed shift fails too: the test page
+is almost only the block, so "no element named" is not evidence the block is
+innocent. If review later shows it was, record a `false-fail` (Step 8).
 
 ## Step 6: Lint + Unit Tests
 
@@ -262,9 +407,28 @@ looking like a clean one.
     }
   ],
   "visualDeltas": [{ "viewport": "desktop", "severity": "minor", "note": "1px CTA offset" }],
-  "gates": { "lint": "pass", "test": "skipped" }
+  "gates": { "lint": "pass", "test": "skipped" },
+  "runtime": {
+    "axe": {
+      "status": "ran",
+      "runs": [
+        { "viewport": "mobile", "violations": [], "incomplete": 0 },
+        { "viewport": "desktop", "theme": "dark", "violations": [
+          { "id": "color-contrast", "impact": "serious", "nodes": [".teaser-cta"] }
+        ], "incomplete": 1 }
+      ]
+    },
+    "keyboard": { "status": "ran", "reachedInOrder": true, "visibleFocus": true, "noTrap": true },
+    "performance": { "status": "ran", "cls": 0.02, "clsInsideBlock": null, "lcpMs": 1800, "firstSectionImageLazy": false },
+    "lighthouse": { "mobile": 0.96, "desktop": 0.98 }
+  }
 }
 ```
+
+`runtime` is **required**. Each of `axe`, `keyboard` and `performance` states a
+`status`; a check the config turned off is `"skipped"`, never omitted. Missing
+runtime evidence makes the gate exit 2, for the same reason an empty
+`viewports` list does: nothing was measured, so there is nothing to pass.
 
 Produce each `results` entry with `lib/compare.mjs` rather than by eye —
 `compareRow(row, computedStyles)` handles unit normalisation (`2rem` against
@@ -316,6 +480,25 @@ Write `<spec-dir>/validation/report.md`:
 
 | Theme | Viewport | Match | Notes |
 
+## Accessibility (runtime)
+
+axe-core <version>, loaded from <source>, scoped to `.<block-name>`, tags wcag2a/aa, wcag21a/aa, wcag22aa
+
+| Viewport | Theme | Violations | Incomplete (manual review) |
+|---|---|---|---|
+
+| Rule | Impact | Element(s) | Help |
+|---|---|---|---|
+
+- Keyboard: <n> focusable elements — reached in order ✓/✗, visible focus ✓/✗, no trap ✓/✗
+- Lighthouse accessibility (page-level, not gating): mobile <score> · desktop <score>
+
+## Performance (lab, local dev server)
+
+- CLS: <value> — inside block ✓/✗/unattributed (gate: ≤ 0.1)
+- LCP: <ms> — informational only, not field data
+- First-section image eager: ✓ / ✗ / n/a
+
 ## Lint & tests
 
 - `lint_cmd`: pass/fail
@@ -338,6 +521,33 @@ Then output a concise summary to the conversation:
 - Path to `report.md` and the screenshots
 - Next step: PR (if PASS) or fix list (if FAIL)
 
+## Step 8: Log the run
+
+Append one row to the run log. The row is derived from `evidence.json` by the
+same code that decided the verdict — verdict, first failing check, axe
+violation count and CLS are computed, not typed:
+
+```bash
+node <skill-dir>/lib/runlog.mjs run {ticket} --evidence=<spec-dir>/validation/evidence.json --log=<run_log_path>
+```
+
+If the gate exited 2, the log refuses the row (exit 2) — an unevaluated run is
+not logged as anything. Unmeasured checks are left out of the row, never written
+as 0.
+
+The log is append-only. When review later disagrees with the gate, the user
+records a correction rather than editing a row:
+
+```bash
+node <skill-dir>/lib/runlog.mjs false-pass {ticket} "<what review caught>" --log=<run_log_path>
+node <skill-dir>/lib/runlog.mjs false-fail {ticket} "<why the gate was wrong>" --log=<run_log_path>
+node <skill-dir>/lib/runlog.mjs report --log=<run_log_path>
+```
+
+Never record a correction on the user's behalf — a false pass or false fail is a
+reviewer's finding, not something this skill can know. Rows carry ticket IDs, so
+`run_log_path` belongs in the project's `.gitignore`.
+
 ## PASS / FAIL Criteria
 
 **These rules live in `lib/verdict.mjs` and are executed, not interpreted.**
@@ -353,6 +563,16 @@ this section is a bug.
 - Every token in the Design Token Mapping resolving to its expected value
 - No console errors and no failed network requests
 - `lint_cmd` and `test_cmd` exiting 0, or skipped when the config value is empty
+- axe-core loaded, found the block, and reported **zero violations** inside it at every viewport/theme tested — or `skipped` by config
+- Keyboard pass: every focusable block element reached in order, with a visible focus change, and no trap — or `skipped` by config
+- CLS ≤ 0.1, unless the shift is attributed outside the block; no lazy-loaded first-section image — or the trace `skipped` by config
+
+**Never decide the verdict on their own:** LCP, the Lighthouse score, and axe
+`incomplete` items. They are recorded under "Recorded, not failing".
+
+**An unmeasured runtime check fails or stops, it never passes.** axe that did
+not load or found no block fails the run. A runtime check with no recorded
+status at all makes the gate exit 2.
 
 **Minor deltas** — spacing within **2px** — are recorded and do not fail on
 their own. They fail when **the same container and the same property** drift at
@@ -369,8 +589,8 @@ result — the dangerous failure here is a PASS nobody earned.
 missing or cannot be resolved to a length, that property is a blocker: the gate
 did not verify it, and "did not verify" must never resolve to a match.
 
-The thresholds are `MINOR_PX_TOLERANCE` and `RECURRENCE_THRESHOLD` in
-`lib/compare.mjs` and `lib/verdict.mjs`, both pinned by tests. See
+The thresholds are `MINOR_PX_TOLERANCE`, `RECURRENCE_THRESHOLD` and
+`CLS_THRESHOLD` in `lib/compare.mjs` and `lib/verdict.mjs`, all pinned by tests. See
 `docs/TESTING.md` for why they are pinned as literals rather than derived.
 
 ## Key Rules
