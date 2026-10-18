@@ -28,7 +28,7 @@ against this config — not against any hardcoded project.
 - Interactive state appearance (hover, focus, active, disabled)
 - Dynamic content element identification (content-dependent sizing)
 
-**NOT captured here** (owned by ticket): functional requirements, acceptance criteria, author-configurable content model, business-language descriptions, behavioral logic.
+**NOT captured here** (owned by ticket): functional requirements, acceptance criteria, author-configurable content model, business-language descriptions, behavioural logic.
 
 ## Pre-flight
 
@@ -165,7 +165,7 @@ it.
 
 ### Structure design.md with these sections
 
-```markdown
+````markdown
 # Design Reference: [Block Name] — {ticket}
 
 ## Source
@@ -222,7 +222,7 @@ All new block CSS MUST use the scoping mechanism described in `component_model` 
 ```
 
 **Token rules:**
-- Every color, spacing, radius, typography value MUST resolve to a token from the token files listed in config (`token_files`) at the layer described in `token_layer_model` (L2/L3 preferred), or a justified `var(--…, fallback)`
+- Every colour, spacing, radius, typography value MUST resolve to a token from the token files listed in config (`token_files`) at the layer described in `token_layer_model` (L2/L3 preferred), or a justified `var(--…, fallback)`
 - Never define `--color-*` in block CSS. If a needed token is missing from the token files, flag it in the Report as a *token gap* — do not invent one in block CSS
 - No hardcoded hex except `#000`/`#fff`
 - No `!important`
@@ -318,7 +318,7 @@ List any colour/spacing/typography value present in Figma but not represented by
 ## Variant CSS
 
 When the Figma design includes variants (e.g. `dark`, `reversed`, `wide`), include the **actual CSS values** here — not just the class name. If Figma has no frame for a stated variant, add a "Variant CSS (when used)" subsection with suggested values and note that implementer must verify with Figma.
-```
+````
 
 ## Step 4: Write design.md
 

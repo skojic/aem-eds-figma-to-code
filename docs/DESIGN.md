@@ -4,28 +4,28 @@
 **Author:** skojic
 **Status:** Approved — ready for implementation planning
 
-A portable, EDS/AEM-first skill pack that turns a Figma design into implementation-ready CSS/HTML and validates the result in a real browser. Extracted and generalized from a production Adobe Edge Delivery Services (Helix) project so it can be reused across projects and showcased publicly.
+A portable, EDS/AEM-first skill pack that turns a Figma design into implementation-ready CSS/HTML and validates the result in a real browser. Extracted and generalised from a production Adobe Edge Delivery Services (Helix) project so it can be reused across projects and showcased publicly.
 
 ---
 
 ## 1. Goal & non-goals
 
-**Goal.** Publish a public GitHub repo (`skojic/aem-eds-figma-to-code`) containing three generalized, reusable Claude Code skills that implement a Figma → spec → build → validate loop for Adobe EDS/AEM work, parameterized so they adapt to any EDS project (and, with effort, non-EDS CSS projects) via a single config file.
+**Goal.** Publish a public GitHub repo (`skojic/aem-eds-figma-to-code`) containing three generalised, reusable Claude Code skills that implement a Figma → spec → build → validate loop for Adobe EDS/AEM work, parameterised so they adapt to any EDS project (and, with effort, non-EDS CSS projects) via a single config file.
 
 **Non-goals.**
 - Not extracting the `.agents/` orchestrator pipeline or the CDD glue (out of scope by decision).
-- Not shipping the originating project's version as a reference implementation (decision: generalize, not two-layer).
+- Not shipping the originating project's version as a reference implementation (decision: generalise, not two-layer).
 - Not a Claude Code plugin — plain skills repo, copy-paste install.
 - No originating-project-identifying content anywhere in the published repo.
 
 ## 2. What gets extracted
 
-Three skills, generalized from the source project's `.claude/skills/`:
+Three skills, generalised from the source project's `.claude/skills/`:
 
 | Skill | Purpose |
 |---|---|
 | `figma-specify` | Extract visual/stylistic design context from Figma → write a `design.md` spec (source of truth for HTML/CSS). |
-| `figma-screenshot` | Fetch a Figma node PNG via the figma MCP → save as audit-trail evidence next to the spec. |
+| `figma-screenshot` | Fetch a Figma node PNG via the Figma MCP → save as audit-trail evidence next to the spec. |
 | `figma-validate` | Drive a browser MCP to render authored content at each breakpoint, compare against the spec + Figma screenshots, spot-check computed styles, run lint/tests, emit PASS/FAIL. |
 
 ### Methodology preserved (the transferable value)
@@ -38,14 +38,14 @@ These are kept intact because they transfer beyond the originating project:
 - **Token-gap validation** — cross-reference every token used in the spec against the design-system token file; flag gaps rather than inventing values.
 - **PASS/FAIL browser validation** — computed-style spot-checks against the Layout Matrix + model-driven visual diff against Figma screenshots, plus lint/test gates.
 
-## 3. Generalization: what becomes config
+## 3. Generalisation: what becomes config
 
 Everything project-specific is lifted out of the SKILL.md files into one config file. The skills reference config *roles*, never hardcoded names.
 
 | Hardcoded in source | Config field | Notes |
 |---|---|---|
 | The project's ticket-tracker, Figma, browser, and CMS MCP server names | MCP roles: `ticket_tracker`, `figma`, `browser`, `content_store` | Each optional; `ticket_tracker` and `content_store` can be absent. |
-| Ticket ID pattern and JIRA browse URL | `ticket_key_pattern`, `ticket_url_base` | Ticket integration optional — a Figma URL alone is enough to run `figma-specify`. |
+| Ticket ID pattern and Jira browse URL | `ticket_key_pattern`, `ticket_url_base` | Ticket integration optional — a Figma URL alone is enough to run `figma-specify`. |
 | Spec output path (ticket-scoped directory + filename) | `spec_output_path` (template) | Supports a `{ticket}` / `{slug}` placeholder. |
 | CMS content path (org/repo/drafts folder for authored blocks) | `content_path_template` | Only used when a `content_store` MCP is configured. |
 | Local preview URL for validation | `preview_url_template` | Local render URL for validation. |
@@ -137,8 +137,8 @@ The ordering inside `validation/` is the design: gather, write it all down, then
 ## 6. Publish flow
 
 1. Build the repo in a new folder outside the source project's repo.
-2. Generalize the three SKILL.md files; write config template, generic example, README, `workflow.md`, LICENSE.
-3. **Hard sanitization gate:** grep the whole tree for the originating project's identifiers — project name, ticket prefix, CMS org/repo names, the project's Figma file key, any real ticket/URL. Present results to the user. Zero hits required before proceeding.
+2. Generalise the three SKILL.md files; write config template, generic example, README, `workflow.md`, LICENSE.
+3. **Hard sanitisation gate:** grep the whole tree for the originating project's identifiers — project name, ticket prefix, CMS org/repo names, the project's Figma file key, any real ticket/URL. Present results to the user. Zero hits required before proceeding.
 4. `git init`, commit.
 5. Switch active gh account to `skojic` (`gh auth switch -u skojic`).
 6. `gh repo create skojic/aem-eds-figma-to-code --public --source . --remote origin --push`.
@@ -146,9 +146,9 @@ The ordering inside `validation/` is the design: gather, write it all down, then
 
 ## 7. Risks & decisions
 
-- **Public visibility of a work-derived asset.** Mitigated by the hard sanitization gate (step 3) and by generalizing away all project specifics. The methodology is generic engineering practice, not proprietary content.
-- **Over-generalization.** The skills are honestly EDS/AEM-first; the README says so. Non-EDS reuse is possible via `component_model` but documented as "adapt," not "drop-in."
-- **Skill invocation.** Source skills use `disable-model-invocation: true` (explicit `/figma-specify` only). Preserved — the generalized skills keep explicit-invocation semantics.
+- **Public visibility of a work-derived asset.** Mitigated by the hard sanitisation gate (step 3) and by generalising away all project specifics. The methodology is generic engineering practice, not proprietary content.
+- **Over-generalisation.** The skills are honestly EDS/AEM-first; the README says so. Non-EDS reuse is possible via `component_model` but documented as "adapt," not "drop-in."
+- **Skill invocation.** Source skills use `disable-model-invocation: true` (explicit `/figma-specify` only). Preserved — the generalised skills keep explicit-invocation semantics.
 - **`da-live`-style content store is optional.** When no `content_store` MCP is set, `figma-validate` expects the user to point `preview_url_template` at already-authored/local content and skips auto-creation.
 
 ## 8. Success criteria
@@ -157,7 +157,7 @@ The ordering inside `validation/` is the design: gather, write it all down, then
 - Three SKILL.md files contain zero originating-project identifiers and reference only config roles.
 - `config/figma-to-code.config.template.md` covers every field in §3.
 - README explains install + the loop + reuse in a way a stranger can follow.
-- Sanitization grep returns zero hits at publish time.
+- Sanitisation grep returns zero hits at publish time.
 
 ---
 

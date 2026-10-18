@@ -23,7 +23,7 @@ comment nobody has to read.
 
 The same applies to `RECURRENCE_THRESHOLD` in `verdict.mjs`: the rule that a
 minor delta fails only at two or more viewports looks like laxity in isolation.
-It is a considered choice about rounding artefacts versus systematic offsets,
+It is a considered choice about rounding artifacts versus systematic offsets,
 and `verdict.test.mjs` says so.
 
 `CLS_THRESHOLD` is pinned the same way, at the literal `0.1`, with boundary

@@ -39,7 +39,7 @@ resolved directory.
 - Render the authored content file in a real browser via the `mcp.browser` server
 - Capture screenshots at the viewports from `breakpoints` (config) that have a Figma frame
 - Compare against `<spec-dir>/figma-*.png` and the rules in `design.md`
-- Spot-check computed CSS (`flex-direction`, `gap`, resolved token colors, font sizes) against the Layout Matrix, **reading expected values from `<spec-dir>/design.matrix.json`** — the structured sidecar `/figma-specify` writes, not the markdown table
+- Spot-check computed CSS (`flex-direction`, `gap`, resolved token colours, font sizes) against the Layout Matrix, **reading expected values from `<spec-dir>/design.matrix.json`** — the structured sidecar `/figma-specify` writes, not the markdown table
 - Surface console errors and network failures
 - Run axe-core scoped to the block, and a keyboard pass (Step 5b) — both gating
 - Record a page-level Lighthouse accessibility score (Step 5b) — context only, never gating
@@ -57,8 +57,8 @@ resolved directory.
 
 1. **Ticket ID resolvable** — `{ticket}` from invocation argument.
 2. **`<spec-dir>/design.md` exists** — produced by `/figma-specify`. If missing, **STOP** and instruct: "Run `/figma-specify {ticket}` first."
-2b. **`<spec-dir>/design.matrix.json` exists and parses** — the structured Layout Matrix, also produced by `/figma-specify`. If it is missing or malformed, **STOP** and instruct: "Re-run `/figma-specify {ticket}` to regenerate the sidecar." **Do not fall back to parsing the markdown table**: reconstructing expectations from prose is how a row quietly stops being checked while the report still says PASS.
-2c. **Node is available** — `lib/cli.mjs` runs the verdict core. If `node` is not on PATH, **STOP**; do not adjudicate the checks by hand instead.
+   - **2b.** **`<spec-dir>/design.matrix.json` exists and parses** — the structured Layout Matrix, also produced by `/figma-specify`. If it is missing or malformed, **STOP** and instruct: "Re-run `/figma-specify {ticket}` to regenerate the sidecar." **Do not fall back to parsing the markdown table**: reconstructing expectations from prose is how a row quietly stops being checked while the report still says PASS.
+   - **2c.** **Node is available** — `lib/cli.mjs` runs the verdict core. If `node` is not on PATH, **STOP**; do not adjudicate the checks by hand instead.
 3. **Figma screenshots exist** under `<spec-dir>/figma-*.png`. If none, **STOP** and instruct: "Run `/figma-screenshot {ticket} <figma-url>` for each frame referenced in design.md, then re-run."
 4. **Authored test content** reachable at `preview_url_template` (from config).
    - If `mcp.content_store` is set: probe via that MCP using `content_path_template` (from config); if the entry is missing, **auto-create** it — see Step 1b for content rules.
@@ -143,8 +143,8 @@ The file is a full authored HTML document. The shell is fixed; only the `<main>`
 
 **Variant coverage** — one authored block per row in `design.md`'s "Variant CSS" section + one per major Layout Matrix scenario that needs visual differentiation.
 
-**Tokens / colors / images**:
-- Do NOT hardcode color hexes in authored content — the content store stores semantic content, not visual styling.
+**Tokens / colours / images**:
+- Do NOT hardcode colour hexes in authored content — the content store stores semantic content, not visual styling.
 - For images, use a placeholder `<picture>` block with a known media path or upload via the content store's media upload tool if the design requires a specific image. If unsure, omit the image and add a `## TODO` comment in the validation report.
 - Use a short demo heading + 1–2 sentences of body copy + 1–2 CTAs (links to `https://google.com/`) per variant.
 
@@ -217,7 +217,7 @@ For each viewport, place `browser-<viewport>.png` next to the corresponding `fig
 
 - **Layout**: same flex/grid direction, gap, alignment
 - **Typography**: matching font family, size hierarchy, line-height
-- **Color**: token-resolved colors visually identical
+- **Colour**: token-resolved colours visually identical
 - **Spacing**: padding/margin between major regions consistent
 - **Interactive elements**: CTAs, hovers (if hover capture is feasible via `hover` then `take_screenshot`)
 
@@ -577,7 +577,7 @@ status at all makes the gate exit 2.
 **Minor deltas** — spacing within **2px** — are recorded and do not fail on
 their own. They fail when **the same container and the same property** drift at
 **two or more viewports**, because that is a systematic offset rather than a
-rounding artefact. Drift on different properties, or on different containers,
+rounding artifact. Drift on different properties, or on different containers,
 does not aggregate.
 
 **Unusable evidence is not a verdict.** No viewports captured, a malformed

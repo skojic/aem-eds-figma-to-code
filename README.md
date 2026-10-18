@@ -13,7 +13,7 @@ Three Claude Code skills that implement a Figma → spec → build → validate 
 | Skill | Invocation | Purpose |
 |---|---|---|
 | `figma-specify` | `/figma-specify <ticket-or-slug>` | Extract visual/stylistic design context from Figma → write a `design.md` spec (source of truth for HTML/CSS). |
-| `figma-screenshot` | `/figma-screenshot <ticket-or-slug> <figma-url>` | Fetch a Figma node PNG via the figma MCP → save it beside the spec as audit-trail evidence. |
+| `figma-screenshot` | `/figma-screenshot <ticket-or-slug> <figma-url>` | Fetch a Figma node PNG via the Figma MCP → save it beside the spec as audit-trail evidence. |
 | `figma-validate` | `/figma-validate <ticket-or-slug>` | Drive a browser MCP to render authored content at each breakpoint, compare against the spec + Figma screenshots, spot-check computed styles, run axe-core, a keyboard pass and a CLS trace, run lint/tests, emit PASS/FAIL and log the run. |
 
 The skills produce the **spec** and the **check**. Writing the actual block code from `design.md` is your step — see [docs/workflow.md](docs/workflow.md).
@@ -114,9 +114,9 @@ These five practices are encoded in the skills and transfer to any CSS project:
 
 ---
 
-## EDS/AEM-first, parameterized to adapt
+## EDS/AEM-first, parameterised to adapt
 
-The skills were extracted and generalized from real-world Adobe Edge Delivery Services (Helix) work, so their defaults reflect that environment. The component model (`@scope`, `export default function decorate(block)`, block-table authoring), token layering (L1 primitives → L2 semantic → L3 component → L4 theme overrides → L5 section backgrounds), and headless-CMS content store are Adobe EDS-shaped.
+The skills were extracted and generalised from real-world Adobe Edge Delivery Services (Helix) work, so their defaults reflect that environment. The component model (`@scope`, `export default function decorate(block)`, block-table authoring), token layering (L1 primitives → L2 semantic → L3 component → L4 theme overrides → L5 section backgrounds), and headless-CMS content store are Adobe EDS-shaped.
 
 The methodology on top transfers to other CSS projects by editing the `component_model` section in the config file. The skills themselves stay unedited; the config is the only project-specific file.
 
@@ -193,7 +193,7 @@ The methodology on top transfers to other CSS projects by editing the `component
 
 Everything lands in the directory `spec_output_path` resolves to, with the validation artifacts in a `validation/` subfolder. The order inside it is the point: **gather, write it all down, then adjudicate.**
 
-Full prerequisites, exact invocations, and fail-stop behaviour are documented in [docs/workflow.md](docs/workflow.md). The rationale behind the pack — what was generalized, what became config, and why — is in [docs/DESIGN.md](docs/DESIGN.md).
+Full prerequisites, exact invocations, and fail-stop behaviour are documented in [docs/workflow.md](docs/workflow.md). The rationale behind the pack — what was generalised, what became config, and why — is in [docs/DESIGN.md](docs/DESIGN.md).
 
 ---
 

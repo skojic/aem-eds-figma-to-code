@@ -301,7 +301,7 @@ The evidence file is what makes a run reproducible: re-running the verdict over 
 
 Each runtime check can be turned off in `runtime_checks`. A check turned off is recorded as `skipped` — *not measured*, never passed — and a check with no recorded status at all makes the gate exit `2`. **LCP (Largest Contentful Paint), the Lighthouse score and axe `incomplete` items never decide the verdict**: lab timings on a local server are not field data, Lighthouse cannot be scoped to one block, and `incomplete` means axe could not decide.
 
-**Minor deltas** — spacing within 2px — are recorded and do not fail on their own. They fail when **the same container and the same property** drift at **two or more viewports**, because that is a systematic offset rather than a rounding artefact. Drift on different properties, or different containers, does not aggregate.
+**Minor deltas** — spacing within 2px — are recorded and do not fail on their own. They fail when **the same container and the same property** drift at **two or more viewports**, because that is a systematic offset rather than a rounding artifact. Drift on different properties, or different containers, does not aggregate.
 
 **The three exit codes matter.** `0` PASS, `1` FAIL, and `2` **could not evaluate** — no viewports captured, malformed evidence, or an unrecognised gate status. A gate that cannot evaluate its input must not report a result, so it emits no verdict at all. Treat `2` as a fail-stop rather than a failure: a caller that cannot tell "failed the check" from "never ran the check" will eventually treat a broken gate as a clean one.
 

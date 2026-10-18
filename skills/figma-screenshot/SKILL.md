@@ -1,6 +1,6 @@
 ---
 name: figma-screenshot
-description: Fetch a Figma node screenshot via the configured figma MCP and save it beside the design.md spec as audit-trail evidence. Config-driven. Explicit invocation only — use only when the user types "/figma-screenshot" or "figma-screenshot <ticket-or-slug> <figma-url>".
+description: Fetch a Figma node screenshot via the configured Figma MCP and save it beside the design.md spec as audit-trail evidence. Config-driven. Explicit invocation only — use only when the user types "/figma-screenshot" or "figma-screenshot <ticket-or-slug> <figma-url>".
 disable-model-invocation: true
 ---
 
@@ -20,7 +20,7 @@ Save screenshots into the **directory of** `spec_output_path` for this
 
 ## Critical Constraints
 
-1. **Read-only** — fetch and save only. Never modifies code, JIRA, or styles.
+1. **Read-only** — fetch and save only. Never modifies code, Jira, or styles.
 2. **`mcp.figma` server required** — per config, only the `mcp.figma` server is allowed for Figma. No substitutions.
 3. **Ticket scope** — saves into the directory derived from `spec_output_path` for `{ticket}`. The ticket must be resolvable from user input or context.
 
